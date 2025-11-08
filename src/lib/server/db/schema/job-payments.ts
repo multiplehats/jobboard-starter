@@ -1,5 +1,5 @@
 import { pgTable, text, varchar, integer, timestamp, json, index } from 'drizzle-orm/pg-core';
-import { createBetterAuthId } from '$lib/utils/id';
+import { createBetterAuthId } from './utils';
 import { jobs } from './jobs';
 
 export const jobPayments = pgTable(

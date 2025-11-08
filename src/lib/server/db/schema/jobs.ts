@@ -10,8 +10,8 @@ import {
 	unique
 } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
-import { createBetterAuthId } from '$lib/utils/id';
-import { user, organization } from '../schema';
+import { createBetterAuthId } from './utils';
+import { user, organization } from './auth';
 
 export const jobs = pgTable(
 	'jobs',

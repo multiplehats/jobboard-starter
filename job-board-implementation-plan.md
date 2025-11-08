@@ -543,7 +543,7 @@ API Routes:
 
 ```typescript
 // src/lib/features/users/types.ts
-export type UserState = 'new' | 'talent' | 'recruiter' | 'both';
+export type UserState = 'talent' | 'recruiter';
 
 export interface UserProfile {
 	state: UserState;
@@ -560,10 +560,10 @@ export function getUserState(
 	const hasTalent = !!talentProfile;
 	const hasRecruiter = !!recruiterProfile;
 
-	if (!hasTalent && !hasRecruiter) return 'new';
 	if (hasTalent && !hasRecruiter) return 'talent';
 	if (!hasTalent && hasRecruiter) return 'recruiter';
-	return 'both';
+
+	throw new Error('User must have either talent or recruiter profile' );
 }
 ```
 
@@ -661,6 +661,7 @@ export const load: LayoutServerLoad = async ({ locals }) => {
 We use **better-auth-ui-svelte** for all authentication flows, which provides pre-built, production-ready components with full Better Auth integration. The library handles the complete authentication cycle including signup, login, password reset, and more.
 
 **Key Benefits:**
+
 - ✅ **No +page.server.ts needed** - All auth logic handled by better-auth-ui-svelte
 - ✅ Pre-built UI components (no custom forms needed)
 - ✅ Automatic session management via Better Auth
@@ -670,6 +671,7 @@ We use **better-auth-ui-svelte** for all authentication flows, which provides pr
 - ✅ Single catch-all route (`/auth/[path]`) for all auth pages
 
 **What Changed from Traditional Approach:**
+
 - ❌ **OLD**: Separate routes with +page.server.ts for each auth flow (signup/talent, signup/recruit, login)
 - ✅ **NEW**: Single `/auth/[path]/+page.svelte` using better-auth-ui-svelte components
 - ❌ **OLD**: Manual form actions, validation, session management
@@ -686,6 +688,7 @@ src/routes/auth/[path]/+page.svelte
 ```
 
 This handles all auth paths:
+
 - `/auth/sign-in` - Login
 - `/auth/sign-up` - Signup with user type selection
 - `/auth/forgot-password` - Password reset request
@@ -803,7 +806,9 @@ Landing page to choose between talent and recruiter signup:
 		</div>
 
 		<p class="mt-8 text-sm text-muted-foreground">
-			Already have an account? <a href="/auth/sign-in" class="text-primary hover:underline">Log in</a>
+			Already have an account? <a href="/auth/sign-in" class="text-primary hover:underline"
+				>Log in</a
+			>
 		</p>
 	</div>
 </div>
@@ -817,7 +822,12 @@ Single route that handles all authentication pages using better-auth-ui-svelte:
 <!-- src/routes/auth/[path]/+page.svelte -->
 <script lang="ts">
 	import { page } from '$app/stores';
-	import { SignInForm, SignUpForm, ForgotPasswordForm, ResetPasswordForm } from 'better-auth-ui-svelte';
+	import {
+		SignInForm,
+		SignUpForm,
+		ForgotPasswordForm,
+		ResetPasswordForm
+	} from 'better-auth-ui-svelte';
 	import { authClient } from '$lib/auth-client';
 
 	const path = $page.params.path;
@@ -825,41 +835,32 @@ Single route that handles all authentication pages using better-auth-ui-svelte:
 	const callbackUrl = $page.url.searchParams.get('callbackUrl') || '/';
 
 	// Additional field for user type selection during signup
-	const additionalFields = userType ? [
-		{
-			label: 'User Type',
-			type: 'hidden' as const,
-			placeholder: userType,
-			required: true,
-			// This field will be sent with signup request
-			validate: async (value: string) => {
-				return ['talent', 'recruiter'].includes(value);
-			}
-		}
-	] : [];
+	const additionalFields = userType
+		? [
+				{
+					label: 'User Type',
+					type: 'hidden' as const,
+					placeholder: userType,
+					required: true,
+					// This field will be sent with signup request
+					validate: async (value: string) => {
+						return ['talent', 'recruiter'].includes(value);
+					}
+				}
+			]
+		: [];
 </script>
 
 <div class="container mx-auto flex min-h-screen items-center justify-center px-4">
 	<div class="w-full max-w-md">
 		{#if path === 'sign-in'}
-			<SignInForm
-				client={authClient}
-				{callbackUrl}
-			/>
+			<SignInForm client={authClient} {callbackUrl} />
 		{:else if path === 'sign-up'}
-			<SignUpForm
-				client={authClient}
-				{callbackUrl}
-				{additionalFields}
-			/>
+			<SignUpForm client={authClient} {callbackUrl} {additionalFields} />
 		{:else if path === 'forgot-password'}
-			<ForgotPasswordForm
-				client={authClient}
-			/>
+			<ForgotPasswordForm client={authClient} />
 		{:else if path === 'reset-password'}
-			<ResetPasswordForm
-				client={authClient}
-			/>
+			<ResetPasswordForm client={authClient} />
 		{:else}
 			<p class="text-center text-muted-foreground">Page not found</p>
 		{/if}
@@ -918,6 +919,7 @@ export const handle: Handle = async ({ event, resolve }) => {
 ### Quick Reference: Auth Flow
 
 **Visual Flow:**
+
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │ 1. User visits /signup                                           │
@@ -956,6 +958,7 @@ export const handle: Handle = async ({ event, resolve }) => {
 ```
 
 **Files you need to create:**
+
 ```
 ✅ src/lib/server/auth.ts (Better Auth config with hooks)
 ✅ src/lib/auth-client.ts (Client-side auth helper)
@@ -2214,10 +2217,8 @@ NODE_ENV=development
 
 ### User State Tests
 
-- [ ] New user has state: 'new'
 - [ ] Talent user has state: 'talent'
 - [ ] Recruiter user has state: 'recruiter'
-- [ ] User with both profiles has state: 'both'
 - [ ] Navigation shows correct links per state
 
 ### URL Structure Tests

@@ -1,6 +1,6 @@
 import { pgTable, text, varchar, integer, boolean, timestamp, index } from 'drizzle-orm/pg-core';
-import { createBetterAuthId } from '$lib/utils/id';
-import { user, organization } from '../schema';
+import { createBetterAuthId } from './utils';
+import { user, organization } from './auth';
 
 export const recruiterProfiles = pgTable(
 	'recruiter_profiles',

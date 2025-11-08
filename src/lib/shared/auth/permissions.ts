@@ -69,6 +69,3 @@ export const viewer = ac.newRole({
 // Export for type inference
 export type Permissions = typeof statement;
 export type Role = 'owner' | 'admin' | 'member' | 'viewer';
-
-// Re-export permission types for convenience
-export type { PermissionRequest, ResourceActions, Resources } from './permission-types.js';

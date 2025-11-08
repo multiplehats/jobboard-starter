@@ -1,9 +1,15 @@
 // See https://svelte.dev/docs/kit/types#app.d.ts
 // for information about these interfaces
+import type { AuthConfig, SessionObj, UserObj } from '$lib/server/auth';
+
 declare global {
 	namespace App {
 		// interface Error {}
-		// interface Locals {}
+		interface Locals {
+			user?: UserObj;
+			session?: SessionObj['session'];
+			getSession: AuthConfig['api']['getSession'];
+		}
 		// interface PageData {}
 		// interface PageState {}
 		// interface Platform {}

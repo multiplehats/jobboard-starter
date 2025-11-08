@@ -1,12 +1,12 @@
 <script lang="ts">
 	import '../app.css';
 	import favicon from '$lib/assets/favicon.svg';
+	import { AuthUIProvider } from 'better-auth-ui-svelte';
+	import { authClient } from '$lib/client/auth/auth-client';
 
 	let { children } = $props();
 </script>
 
-<svelte:head>
-	<link rel="icon" href={favicon} />
-</svelte:head>
-
-{@render children()}
+<AuthUIProvider {authClient}>
+	{@render children()}
+</AuthUIProvider>

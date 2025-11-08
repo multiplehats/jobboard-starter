@@ -1,6 +1,6 @@
 import { pgTable, text, timestamp, index, unique } from 'drizzle-orm/pg-core';
-import { createBetterAuthId } from '$lib/utils/id';
-import { user } from '../schema';
+import { createBetterAuthId } from './utils';
+import { user } from './auth';
 import { jobs } from './jobs';
 
 export const savedJobs = pgTable(

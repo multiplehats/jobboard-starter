@@ -1,6 +1,6 @@
 import { pgTable, text, varchar, timestamp, json, index } from 'drizzle-orm/pg-core';
-import { createBetterAuthId } from '$lib/utils/id';
-import { user } from '../schema';
+import { createBetterAuthId } from './utils';
+import { user } from './auth';
 
 export const adminActions = pgTable(
 	'admin_actions',
