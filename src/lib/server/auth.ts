@@ -8,17 +8,17 @@ import {
 	lastLoginMethod,
 	multiSession
 } from 'better-auth/plugins';
-import { BETTER_AUTH_URL } from '$env/static/private';
+import { PUBLIC_APP_URL } from '$env/static/public';
 import {
 	ac,
 	admin as adminRole,
 	member as memberRole,
 	owner,
 	viewer
-} from '$lib/shared/permissions.js';
+} from '$lib/shared/auth/permissions.js';
 
 export const auth = betterAuth({
-	baseURL: BETTER_AUTH_URL,
+	baseURL: PUBLIC_APP_URL,
 	database: drizzleAdapter(db, {
 		provider: 'pg'
 	}),
@@ -55,3 +55,9 @@ export const auth = betterAuth({
 		multiSession()
 	]
 });
+
+export type AuthConfig = typeof auth;
+export type SessionObj = typeof auth.$Infer.Session;
+export type UserObj = typeof auth.$Infer.Session.user;
+export type OrganizationObj = typeof auth.$Infer.Organization;
+export type MemberObj = typeof auth.$Infer.Member;
