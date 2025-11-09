@@ -10,6 +10,11 @@
 	import * as RadioGroup from '$lib/components/ui/radio-group/index.js';
 	import { Container } from '$lib/components/ui/container/index.js';
 	import { Heading } from '$lib/components/ui/heading/index.js';
+	import { Slider } from '$lib/components/ui/slider/index.js';
+	import { Calendar } from '$lib/components/ui/calendar/index.js';
+	import * as Popover from '$lib/components/ui/popover/index.js';
+	import CalendarIcon from '@lucide/svelte/icons/calendar';
+	import { getLocalTimeZone, today, type CalendarDate } from '@internationalized/date';
 
 	// Job type options
 	const jobTypes = [
@@ -35,11 +40,6 @@
 		{ value: 'onsite', label: 'On-site' }
 	] as const;
 	const currencies = ['USD', 'EUR', 'GBP', 'CAD', 'AUD'] as const;
-	const salaryPeriods = [
-		{ value: 'year', label: 'Year' },
-		{ value: 'month', label: 'Month' },
-		{ value: 'hour', label: 'Hour' }
-	] as const;
 
 	// Form state
 	let selectedJobType = $state<(typeof jobTypes)[number]>();
@@ -48,14 +48,25 @@
 	let selectedHiringLocationType = $state('worldwide');
 	let selectedWorkingPermitsType = $state('no-specific');
 	let selectedCurrency = $state('USD');
-	let selectedSalaryPeriod = $state('year');
+	let salaryRange = $state([50000, 150000]);
+	let applicationDeadline = $state<CalendarDate | undefined>();
+	let deadlinePopoverOpen = $state(false);
 	let featureInEmails = $state(false);
 
 	// Helpers for Select component display
 	const jobTypeLabel = $derived(selectedJobType ?? 'Select job type');
 	const currencyLabel = $derived(currencies.find((c) => c === selectedCurrency) ?? 'USD');
-	const salaryPeriodLabel = $derived(
-		salaryPeriods.find((p) => p.value === selectedSalaryPeriod)?.label ?? 'Year'
+	const deadlineLabel = $derived(
+		applicationDeadline
+			? applicationDeadline.toDate(getLocalTimeZone()).toLocaleDateString('en-US', {
+					month: 'long',
+					day: 'numeric',
+					year: 'numeric'
+				})
+			: 'Select deadline'
+	);
+	const deadlineValue = $derived(
+		applicationDeadline ? applicationDeadline.toDate(getLocalTimeZone()).toISOString() : ''
 	);
 
 	// Helper to safely get field issues
@@ -195,12 +206,39 @@
 							data-invalid={getIssues(submitJobPosting.fields.job.applicationDeadline).length > 0}
 						>
 							<Field.Label for="job-deadline">Application Deadline *</Field.Label>
-							<Input
-								id="job-deadline"
+							<Popover.Root bind:open={deadlinePopoverOpen}>
+								<Popover.Trigger id="job-deadline">
+									{#snippet child({ props })}
+										<Button
+											{...props}
+											variant="outline"
+											class="w-full justify-start font-normal"
+											aria-invalid={getIssues(submitJobPosting.fields.job.applicationDeadline)
+												.length > 0}
+										>
+											<CalendarIcon class="mr-2 size-4" />
+											{deadlineLabel}
+										</Button>
+									{/snippet}
+								</Popover.Trigger>
+								<Popover.Content class="w-auto overflow-hidden p-0" align="start">
+									<Calendar
+										type="single"
+										bind:value={applicationDeadline}
+										captionLayout="dropdown"
+										onValueChange={() => {
+											deadlinePopoverOpen = false;
+										}}
+										minValue={today(getLocalTimeZone())}
+									/>
+								</Popover.Content>
+							</Popover.Root>
+							<input
 								{...submitJobPosting.fields.job.applicationDeadline.as('text')}
-								type="date"
-								aria-invalid={getIssues(submitJobPosting.fields.job.applicationDeadline).length > 0}
+								type="hidden"
+								value={deadlineValue}
 							/>
+							<Field.Description>Select the last day candidates can apply</Field.Description>
 							{#each getIssues(submitJobPosting.fields.job.applicationDeadline) as issue, i (i)}
 								<Field.Error>{issue.message}</Field.Error>
 							{/each}
@@ -324,75 +362,58 @@
 					<Field.Separator />
 
 					<Field.Group>
-						<div class="grid grid-cols-2 gap-4">
-							<Field.Field data-invalid={getIssues(submitJobPosting.fields.salary.min).length > 0}>
-								<Field.Label for="salary-min">Minimum Salary</Field.Label>
-								<Input
-									id="salary-min"
-									placeholder="50000"
-									{...submitJobPosting.fields.salary.min.as('text')}
-									type="number"
-									aria-invalid={getIssues(submitJobPosting.fields.salary.min).length > 0}
-								/>
-								{#each getIssues(submitJobPosting.fields.salary.min) as issue, i (i)}
-									<Field.Error>{issue.message}</Field.Error>
-								{/each}
-							</Field.Field>
+						<Field.Field>
+							<Field.Label>Annual Salary Range</Field.Label>
+							<Field.Description>
+								${salaryRange[0].toLocaleString()} - ${salaryRange[1].toLocaleString()}
+								{selectedCurrency}
+								per year
+							</Field.Description>
+							<Slider
+								type="multiple"
+								bind:value={salaryRange}
+								max={500000}
+								min={0}
+								step={5000}
+								class="mt-2 w-full"
+								aria-label="Salary Range"
+							/>
+							<input
+								{...submitJobPosting.fields.salary.min.as('number')}
+								type="hidden"
+								value={salaryRange[0]}
+							/>
+							<input
+								{...submitJobPosting.fields.salary.max.as('number')}
+								type="hidden"
+								value={salaryRange[1]}
+							/>
+							{#each getIssues(submitJobPosting.fields.salary.min) as issue, i (i)}
+								<Field.Error>{issue.message}</Field.Error>
+							{/each}
+							{#each getIssues(submitJobPosting.fields.salary.max) as issue, i (i)}
+								<Field.Error>{issue.message}</Field.Error>
+							{/each}
+						</Field.Field>
 
-							<Field.Field data-invalid={getIssues(submitJobPosting.fields.salary.max).length > 0}>
-								<Field.Label for="salary-max">Maximum Salary</Field.Label>
-								<Input
-									id="salary-max"
-									placeholder="80000"
-									{...submitJobPosting.fields.salary.max.as('number')}
-									aria-invalid={getIssues(submitJobPosting.fields.salary.max).length > 0}
-									type="number"
-								/>
-								{#each getIssues(submitJobPosting.fields.salary.max) as issue, i (i)}
-									<Field.Error>{issue.message}</Field.Error>
-								{/each}
-							</Field.Field>
-						</div>
-
-						<div class="grid grid-cols-2 gap-4">
-							<Field.Field>
-								<Field.Label for="salary-currency">Currency</Field.Label>
-								<Select.Root type="single" bind:value={selectedCurrency}>
-									<Select.Trigger id="salary-currency">
-										{currencyLabel}
-									</Select.Trigger>
-									<Select.Content>
-										{#each currencies as currency (currency)}
-											<Select.Item value={currency}>{currency}</Select.Item>
-										{/each}
-									</Select.Content>
-								</Select.Root>
-								<input
-									{...submitJobPosting.fields.salary.currency.as('string')}
-									type="hidden"
-									value={selectedCurrency}
-								/>
-							</Field.Field>
-
-							<Field.Field>
-								<Field.Label for="salary-period">Period</Field.Label>
-								<Select.Root type="single" bind:value={selectedSalaryPeriod}>
-									<Select.Trigger id="salary-period">
-										{salaryPeriodLabel}
-									</Select.Trigger>
-									<Select.Content>
-										{#each salaryPeriods as period (period.value)}
-											<Select.Item value={period.value}>{period.label}</Select.Item>
-										{/each}
-									</Select.Content>
-								</Select.Root>
-								<input
-									{...submitJobPosting.fields.salary.period.as('text')}
-									type="hidden"
-									value={selectedSalaryPeriod}
-								/>
-							</Field.Field>
-						</div>
+						<Field.Field>
+							<Field.Label for="salary-currency">Currency</Field.Label>
+							<Select.Root type="single" bind:value={selectedCurrency}>
+								<Select.Trigger id="salary-currency">
+									{currencyLabel}
+								</Select.Trigger>
+								<Select.Content>
+									{#each currencies as currency (currency)}
+										<Select.Item value={currency}>{currency}</Select.Item>
+									{/each}
+								</Select.Content>
+							</Select.Root>
+							<input
+								{...submitJobPosting.fields.salary.currency.as('string')}
+								type="hidden"
+								value={selectedCurrency}
+							/>
+						</Field.Field>
 					</Field.Group>
 				</Field.Set>
 

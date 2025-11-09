@@ -20,7 +20,6 @@ export const createJobSchema = z.object({
 	salaryMin: z.number().int().positive().optional(),
 	salaryMax: z.number().int().positive().optional(),
 	salaryCurrency: z.string().default('USD'),
-	salaryPeriod: z.enum(['year', 'month', 'hour']).default('year'),
 
 	// Step 3: Application
 	applicationUrl: z.string().url('Must be a valid URL').min(1, 'Application URL is required'),
@@ -84,13 +83,12 @@ export const publicJobPostingSchema = z.object({
 		permits: z.array(z.string()).default([])
 	}),
 
-	// Salary information
+	// Salary information (annual)
 	salary: z
 		.object({
 			min: z.number().int().positive().optional(),
 			max: z.number().int().positive().optional(),
-			currency: z.string().default('USD'),
-			period: z.enum(['year', 'month', 'hour']).default('year')
+			currency: z.string().default('USD')
 		})
 		.refine(
 			(data) => {

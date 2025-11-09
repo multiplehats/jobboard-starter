@@ -20,7 +20,7 @@
 	const headerVariants = tv({
 		slots: {
 			base: 'sticky top-0 right-0 left-0 z-40 flex items-center bg-background transition-all duration-300',
-			container: 'flex items-center transition-all duration-300',
+			container: 'flex items-center justify-between transition-all duration-300',
 			logo: 'transition-all duration-300',
 			nav: 'hidden md:block',
 			actions: 'flex items-center gap-4'
@@ -28,23 +28,19 @@
 		variants: {
 			variant: {
 				default: {
-					container: 'justify-between',
 					logo: '',
 					nav: 'hidden md:block'
 				},
 				minimal: {
-					container: 'justify-between',
 					logo: '',
 					nav: 'hidden'
 				}
 			},
 			logoPosition: {
 				left: {
-					container: 'justify-start',
 					logo: ''
 				},
 				center: {
-					container: 'justify-center',
 					logo: 'absolute left-1/2 -translate-x-1/2'
 				}
 			},
@@ -173,7 +169,7 @@
 
 <header use:stickyHeader class={styles.base()}>
 	<Container>
-		<div class={styles.container()}>
+		<div class={cn(styles.container(), logoPosition === 'center' && 'relative')}>
 			<!-- Mobile Menu (shown on mobile only) -->
 			<div class="md:hidden">
 				<!-- Empty for now -->
@@ -225,7 +221,7 @@
 
 			<!-- Right side: Custom actions or default actions -->
 			{#if rightActions}
-				<div class={styles.actions()}>
+				<div class={cn(styles.actions(), logoPosition === 'center' && 'relative z-10')}>
 					{@render rightActions()}
 				</div>
 			{:else if variant === 'default'}

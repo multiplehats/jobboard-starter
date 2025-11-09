@@ -1,8 +1,26 @@
 # Project Documentation
 
+# Project Standards
+
+## Package Manager
+
+- Use `pnpm` as package manager
+
+## TypeScript
+
+- Use `pnpm run check` to run check for Typescript errors
+- It's mandatory to have zero errors, and no use of `any` unless absolutely necessary (in which case justify it in a comment)
+
+## Icons
+
+`lucide-svelte` does NOT exist, use `@lucide/svelte` instead. Always import the full path, e.g.:
+
+```typescript
+import ZapIcon from '@lucide/svelte/icons/zap';
+```
+
 ## Quick Links
 
-- **[Standards](./docs/standards.md)** - Project standards and conventions
 - **[SEO Architecture](./docs/seo-architecture.md)** - SEO meta tags implementation
 - **[Backend Architecture](./docs/backend-architecture.md)** - Complete backend architecture guide
 - **[Modal Stack](./docs/modal-stack.md)** - Modal management system
