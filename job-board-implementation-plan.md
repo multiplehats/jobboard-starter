@@ -494,7 +494,7 @@ Public Routes:
 ├── /search                                    # Full-text search results
 │
 Auth Routes (better-auth-ui-svelte):
-├── /signup                                    # Signup choice page (talent vs recruiter)
+├── /auth/get-started                                    # Signup choice page (talent vs recruiter)
 ├── /auth/sign-up                              # Signup form (with userType param)
 ├── /auth/sign-in                              # Login form
 ├── /auth/forgot-password                      # Password reset request
@@ -632,7 +632,7 @@ export const load: LayoutServerLoad = async ({ locals }) => {
 	<a href="/">Browse Jobs</a>
 
 	{#if !userProfile}
-		<a href="/signup">Sign Up</a>
+		<a href="/auth/get-started">Sign Up</a>
 		<a href="/auth/sign-in">Log In</a>
 	{:else if userProfile.state === 'talent'}
 		<a href="/dashboard/talent">Dashboard</a>
@@ -757,7 +757,7 @@ export const auth = betterAuth({
 Landing page to choose between talent and recruiter signup:
 
 ```svelte
-<!-- src/routes/signup/+page.svelte -->
+<!-- src/routes/auth/get-started/+page.svelte -->
 <script lang="ts">
 	import { Button } from '$lib/components/ui/button';
 	import { Card } from '$lib/components/ui/card';
@@ -922,7 +922,7 @@ export const handle: Handle = async ({ event, resolve }) => {
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│ 1. User visits /signup                                           │
+│ 1. User visits /auth/get-started                                           │
 │    Sees two options: "Find Jobs" (talent) or "Post Jobs" (rec)  │
 └─────────────────────────────────────────────────────────────────┘
                             │
@@ -962,7 +962,7 @@ export const handle: Handle = async ({ event, resolve }) => {
 ```
 ✅ src/lib/server/auth.ts (Better Auth config with hooks)
 ✅ src/lib/auth-client.ts (Client-side auth helper)
-✅ src/routes/signup/+page.svelte (Choice page)
+✅ src/routes/auth/get-started/+page.svelte (Choice page)
 ✅ src/routes/auth/[path]/+page.svelte (Catch-all auth route)
 ✅ src/routes/api/auth/[...auth]/+server.ts (Better Auth API)
 ✅ src/hooks.server.ts (Session management)
@@ -1578,9 +1578,9 @@ async function sendVerificationEmail({
    - [ ] Create new route folders:
      - `src/routes/(app)/companies/[companySlug]/+page.svelte`
      - `src/routes/(app)/companies/[companySlug]/jobs/[jobSlug]/+page.svelte`
-     - `src/routes/(auth)/signup/+page.svelte`
-     - `src/routes/(auth)/signup/talent/+page.svelte`
-     - `src/routes/(auth)/signup/recruit/+page.svelte`
+     - `src/routes/(auth)/auth/get-started/+page.svelte`
+     - `src/routes/(auth)/auth/get-started/talent/+page.svelte`
+     - `src/routes/(auth)/auth/get-started/recruit/+page.svelte`
    - [ ] Update slug generation utilities
 
 4. **User State Management**
@@ -1610,7 +1610,7 @@ async function sendVerificationEmail({
    - [ ] Create auth client (`src/lib/auth-client.ts`)
 
 6. **Auth Routes (No +page.server.ts needed!)**
-   - [ ] Build `/signup/+page.svelte` - Landing page with talent/recruiter choice
+   - [ ] Build `/auth/get-started/+page.svelte` - Landing page with talent/recruiter choice
    - [ ] Build `/auth/[path]/+page.svelte` - Single catch-all route using better-auth-ui-svelte
    - [ ] Configure additional fields for user type selection
    - [ ] Set up Better Auth hooks to create profiles after signup

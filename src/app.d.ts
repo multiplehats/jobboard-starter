@@ -1,5 +1,3 @@
-// See https://svelte.dev/docs/kit/types#app.d.ts
-// for information about these interfaces
 import type { AuthConfig, SessionObj, UserObj } from '$lib/server/auth';
 
 declare global {

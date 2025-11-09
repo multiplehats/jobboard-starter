@@ -27,6 +27,10 @@ export const auth = betterAuth({
 	database: drizzleAdapter(db, {
 		provider: 'pg'
 	}),
+	emailAndPassword: {
+		enabled: true
+	},
+
 	socialProviders: {
 		google: {
 			clientId: '',
@@ -48,16 +52,16 @@ export const auth = betterAuth({
 			// No organization hooks needed - users will create their own API keys
 			// Trial users can create keys through the dashboard with trial limits
 		}),
-		twoFactor(),
+		// twoFactor(),
 		magicLink({
 			async sendMagicLink(data) {
 				console.log('Sending magic link', {
 					url: data.url
 				});
 			}
-		}),
-		lastLoginMethod(),
-		multiSession()
+		})
+		// lastLoginMethod()
+		// multiSession()
 	],
 	// Hook to create talent or recruiter profile after signup
 	hooks: {
@@ -73,11 +77,12 @@ export const auth = betterAuth({
 				return;
 			}
 
-			// Get the request body to extract userType
-			if (!ctx.request) {
+			// Get the request body from context (already parsed by Better Auth)
+			const body = ctx.body as { userType?: string } | undefined;
+			if (!body) {
 				return;
 			}
-			const body = await ctx.request.clone().json();
+
 			const userType = body.userType;
 
 			// Create the appropriate profile based on user type

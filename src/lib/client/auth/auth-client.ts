@@ -3,7 +3,8 @@ import {
 	apiKeyClient,
 	inferAdditionalFields,
 	multiSessionClient,
-	organizationClient
+	organizationClient,
+	magicLinkClient
 } from 'better-auth/client/plugins';
 import { createAuthClient } from 'better-auth/svelte';
 import { PUBLIC_APP_URL } from '$env/static/public';
@@ -16,10 +17,11 @@ import {
 	viewer
 } from '$lib/shared/auth/permissions.js';
 
-export const authClient = createAuthClient({
+const baseAuthClient = createAuthClient({
 	plugins: [
 		inferAdditionalFields<AuthConfig>(),
 		adminClient(),
+		magicLinkClient(),
 		organizationClient({
 			ac, // Pass access control to client
 			roles: {
@@ -37,7 +39,35 @@ export const authClient = createAuthClient({
 	],
 	baseURL: PUBLIC_APP_URL
 });
-export type AuthClient = typeof authClient;
+
+// Wrap the authClient to inject userType from URL during signup
+export const authClient = new Proxy(baseAuthClient, {
+	get(target, prop) {
+		if (prop === 'signUp') {
+			return new Proxy(target.signUp, {
+				get(signUpTarget, signUpProp) {
+					if (signUpProp === 'email') {
+						return async (options: any) => {
+							// Get userType from URL if available
+							const params = new URLSearchParams(window.location.search);
+							const userType = params.get('userType') || 'talent';
+
+							// Inject userType into the signup request
+							return signUpTarget.email({
+								...options,
+								userType
+							});
+						};
+					}
+					return signUpTarget[signUpProp as keyof typeof signUpTarget];
+				}
+			});
+		}
+		return target[prop as keyof typeof target];
+	}
+});
+
+export type AuthClient = typeof baseAuthClient;
 
 export type Session = AuthClient['$Infer']['Session'] | null;
 export type User = AuthClient['$Infer']['Session']['user'] | null;
