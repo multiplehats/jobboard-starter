@@ -86,6 +86,7 @@ After completing the code, ask the user if they want a playground link. Only cal
 ### UI Components
 
 - **Modal Stack**: See [docs/modal-stack.md](./docs/modal-stack.md) for modal management
+- **Tiptap Editor**: See [docs/tiptap-editor.md](./docs/tiptap-editor.md) for rich text editing
 - **shadcn-svelte**: Use context7 MCP to check documentation
 
 ### SEO & Meta Tags

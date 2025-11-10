@@ -1,4 +1,6 @@
 import { resolve } from '$app/paths';
+import type { page } from '$app/state';
+import type { ResolvedPathname } from '$app/types';
 import type { RouteId } from '$app/types';
 
 /**
@@ -126,6 +128,45 @@ export const signUpRecruiter = (additionalParams?: Record<string, string>) =>
 			additionalParams
 		)
 	);
+
+/**
+ * Check if a given path matches a route (ignoring search params)
+ * Useful for active link styling and conditional rendering
+ *
+ * @param currentPath - The current path to check (e.g., from page.url.pathname)
+ * @param targetRoute - The route to match against (from routes or authRoutes)
+ * @returns true if the paths match (excluding search params)
+ *
+ * @example
+ * // In a component with page
+ * const isActive = $derived(isRouteActive(page.url.pathname, routes.home()));
+ *
+ * @example
+ * // Check against multiple routes
+ * const isAuthPage = $derived(isRouteActive(page.url.pathname, authRoutes.signIn()) ||
+ *                 isRouteActive(page.url.pathname, authRoutes.signUp()));
+ */
+export function isRouteActive(pageObj: typeof page, targetPath: ResolvedPathname): boolean {
+	return pageObj.url.pathname === targetPath;
+}
+
+/**
+ * Check if the current path starts with a given route (useful for nested routes)
+ *
+ * @param currentPath - The current path to check
+ * @param targetRoute - The route prefix to match against
+ * @returns true if currentPath starts with targetRoute
+ *
+ * @example
+ * // Check if we're anywhere in the auth section
+ * $: isInAuth = isRoutePrefix(page.url.pathname, '/auth');
+ */
+export function isRoutePrefix(currentPath: string, targetRoute: string): boolean {
+	const cleanCurrentPath = currentPath.split('?')[0];
+	const cleanTargetRoute = targetRoute.split('?')[0];
+
+	return cleanCurrentPath.startsWith(cleanTargetRoute);
+}
 
 /**
  * Convenience paths (backward compatibility)

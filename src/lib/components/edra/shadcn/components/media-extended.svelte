@@ -2,7 +2,7 @@
 	import { onDestroy, onMount, type Snippet } from 'svelte';
 	import { NodeViewWrapper } from 'svelte-tiptap';
 	import type { NodeViewProps } from '@tiptap/core';
-	import { cn } from '$lib/utils.js';
+	import { cn } from '$lib/utils/ui.js';
 	import { Button, buttonVariants } from '$lib/components/ui/button/index.js';
 
 	import AlignCenter from '@lucide/svelte/icons/align-center';
@@ -133,7 +133,7 @@
 	});
 </script>
 
-<!-- !FIXME: For some wierd reason, the change in `node.attrs.align` is not reactive to NodeViewWrapper 
+<!-- !FIXME: For some wierd reason, the change in `node.attrs.align` is not reactive to NodeViewWrapper
  So for now, we'll re-render it when the align changes.
 -->
 
@@ -167,7 +167,7 @@
 					}}
 				>
 					<div
-						class="bg-muted z-20 h-[70px] w-1 rounded-xl border opacity-0 transition-all group-hover:opacity-100"
+						class="z-20 h-[70px] w-1 rounded-xl border bg-muted opacity-0 transition-all group-hover:opacity-100"
 					></div>
 				</div>
 
@@ -185,12 +185,12 @@
 					}}
 				>
 					<div
-						class="bg-muted z-20 h-[70px] w-1 rounded-xl border opacity-0 transition-all group-hover:opacity-100"
+						class="z-20 h-[70px] w-1 rounded-xl border bg-muted opacity-0 transition-all group-hover:opacity-100"
 					></div>
 				</div>
 				<div
 					class={cn(
-						'bg-background/50 absolute -top-2 left-[calc(50%-3rem)] flex items-center gap-1 rounded border p-1 opacity-0 backdrop-blur-sm transition-opacity',
+						'absolute -top-2 left-[calc(50%-3rem)] flex items-center gap-1 rounded border bg-background/50 p-1 opacity-0 backdrop-blur-sm transition-opacity',
 						!resizing && 'group-hover:opacity-100',
 						openedMore && 'opacity-100'
 					)}

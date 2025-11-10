@@ -30,7 +30,7 @@
 
 {#snippet logo({ className }: { className?: string })}
 	<svg
-		class={className}
+		class={cn('text-foreground/75', className)}
 		viewBox="0 0 562 125"
 		version="1.1"
 		xmlns="http://www.w3.org/2000/svg"
@@ -39,7 +39,12 @@
 		<g id="StackSee" stroke="none" stroke-width="1" fill="none" fill-rule="evenodd">
 			<g id="Logo-presentation-Copy" fill-rule="nonzero" transform="translate(-672, -535)">
 				<g id="Group" fill-rule="evenodd" transform="translate(672, 535)">
-					<g id="job-board" transform="translate(164.69, 0)" fill="#2E1403" fill-rule="nonzero">
+					<g
+						id="job-board"
+						transform="translate(164.69, 0)"
+						fill="currentColor"
+						fill-rule="nonzero"
+					>
 						<path
 							d="M25.38,31.78 C25.38,27.37 21.96,24.22 17.01,24.22 C12.06,24.22 8.64,27.37 8.64,31.78 C8.64,36.01 12.06,39.16 17.01,39.16 C21.96,39.16 25.38,36.01 25.38,31.78 Z M23.31,42.94 L10.89,42.94 L10.89,90.46 C10.89,95.77 8.55,97.75 5.22,97.75 C3.15,97.75 1.35,97.39 0,96.67 L0,108.28 C2.16,109.09 4.5,109.27 6.75,109.27 C16.29,109.27 23.31,103.78 23.31,90.82 L23.31,42.94 Z"
 							id="Shape"

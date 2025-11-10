@@ -1,1 +1,1 @@
-export { default as Wrapper } from "./wrapper.svelte";
+export { default as Wrapper, wrapperVariants, type WrapperProps } from './wrapper.svelte';

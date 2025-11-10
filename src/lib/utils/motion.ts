@@ -19,10 +19,14 @@ export type MotionParams = {
  * </div>
  * ```
  */
-export const motion: Action<HTMLElement, MotionParams> = (
+export const motion: Action<HTMLElement, MotionParams | undefined> = (
 	node: HTMLElement,
-	data: MotionParams = { keyframes: { opacity: [0, 1] } }
+	data: MotionParams | undefined = { keyframes: { opacity: [0, 1] } }
 ) => {
+	if (!data) {
+		return;
+	}
+
 	// Start animation immediately
 	const animation = animate(node, data.keyframes, data.options);
 	animation.play();

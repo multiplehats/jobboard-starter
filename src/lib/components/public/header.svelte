@@ -20,7 +20,7 @@
 	const headerVariants = tv({
 		slots: {
 			base: 'sticky top-0 right-0 left-0 z-40 flex items-center bg-background transition-all duration-300',
-			container: 'flex items-center justify-between transition-all duration-300',
+			container: 'w-full flex items-center transition-all duration-300',
 			logo: 'transition-all duration-300',
 			nav: 'hidden md:block',
 			actions: 'flex items-center gap-4'
@@ -28,19 +28,23 @@
 		variants: {
 			variant: {
 				default: {
+					container: 'justify-between',
 					logo: '',
 					nav: 'hidden md:block'
 				},
 				minimal: {
+					container: 'justify-between',
 					logo: '',
 					nav: 'hidden'
 				}
 			},
 			logoPosition: {
 				left: {
+					container: 'justify-start',
 					logo: ''
 				},
 				center: {
+					container: 'justify-center',
 					logo: 'absolute left-1/2 -translate-x-1/2'
 				}
 			},
@@ -89,9 +93,7 @@
 	const SCROLL_THRESHOLD = 50; // Pixels to scroll before header becomes sticky
 
 	// Determine logo position based on variant and presence of right actions
-	const logoPosition = $derived(
-		variant === 'minimal' && rightActions ? 'center' : 'left'
-	);
+	const logoPosition = $derived(variant === 'minimal' && rightActions ? 'center' : 'left');
 
 	const styles = $derived(headerVariants({ variant, sticky: isSticky, logoPosition }));
 
@@ -170,13 +172,13 @@
 <header use:stickyHeader class={styles.base()}>
 	<Container>
 		<div class={cn(styles.container(), logoPosition === 'center' && 'relative')}>
-			<!-- Mobile Menu (shown on mobile only) -->
-			<div class="md:hidden">
-				<!-- Empty for now -->
-			</div>
-
 			<!-- Left side: Logo and Navigation -->
 			<div class="flex items-center gap-8">
+				<!-- Mobile Menu (shown on mobile only) -->
+				<div class="md:hidden">
+					<!-- Empty for now -->
+				</div>
+
 				<div class={styles.logo()}>
 					<Logo />
 				</div>
