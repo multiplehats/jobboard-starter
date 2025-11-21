@@ -30,7 +30,8 @@ const jobExtractionSchema = {
 			properties: {
 				title: {
 					type: 'string' as const,
-					description: 'The job title (e.g., "Senior Software Engineer")'
+					description:
+						'The job title in proper title case (e.g., "Senior Software Engineer", not "SENIOR SOFTWARE ENGINEER")'
 				},
 				type: {
 					type: 'string' as const,
@@ -59,6 +60,16 @@ const jobExtractionSchema = {
 			type: 'string' as const,
 			enum: LOCATION_TYPES,
 			description: `Location type: ${LOCATION_TYPES.join(', ')}`
+		},
+		city: {
+			type: 'string' as const,
+			description:
+				'City and region where the office is located (e.g., "San Francisco, CA" or "London" or "Arnhem") - required for onsite/hybrid positions'
+		},
+		country: {
+			type: 'string' as const,
+			description:
+				'2-letter ISO 3166-1 alpha-2 country code (e.g., "US", "UK", "NL", "DE", "FR"). IMPORTANT: Must be exactly 2 uppercase letters, NOT full country names like "Nederland" or "United States".'
 		},
 		hiringLocation: {
 			type: 'object' as const,
@@ -113,7 +124,8 @@ const jobExtractionSchema = {
 			properties: {
 				name: {
 					type: 'string' as const,
-					description: 'Company or organization name'
+					description:
+						'Company or organization name in proper case (e.g., "Acme Corporation", not "ACME CORPORATION")'
 				},
 				url: {
 					type: 'string' as const,
@@ -138,6 +150,8 @@ export type PrefillJobData = {
 		applicationDeadline?: string;
 	};
 	locationType?: (typeof LOCATION_TYPES)[number];
+	city?: string;
+	country?: string;
 	hiringLocation?: {
 		type?: (typeof HIRING_LOCATION_TYPES)[number];
 		timezones?: string[];
@@ -165,6 +179,155 @@ export type PrefillResult = {
 	missingFields?: string[];
 	error?: string;
 };
+
+/**
+ * Helper to truncate long strings for logging
+ */
+function truncate(str: string | undefined, maxLength = 60): string {
+	if (!str) return '(empty)';
+	if (str.length <= maxLength) return str;
+	return str.substring(0, maxLength) + '...';
+}
+
+/**
+ * Normalize text that's in ALL CAPS to Title Case
+ * Handles special cases like acronyms (USA, UK, etc.)
+ */
+function normalizeAllCaps(text: string): string {
+	if (!text) return text;
+
+	// Check if the entire string is uppercase (with potential spaces, commas, etc.)
+	const isAllCaps = text === text.toUpperCase() && text !== text.toLowerCase();
+
+	if (!isAllCaps) return text;
+
+	// List of common acronyms/abbreviations that should stay uppercase
+	const keepUppercase = new Set([
+		'USA',
+		'UK',
+		'US',
+		'EU',
+		'UAE',
+		'NYC',
+		'LA',
+		'SF',
+		'DC',
+		'IT',
+		'HR',
+		'CEO',
+		'CTO',
+		'CFO',
+		'AI',
+		'ML',
+		'API',
+		'NL',
+		'DE',
+		'FR',
+		'ES',
+		'PT',
+		'BE'
+	]);
+
+	// Common lowercase words that should not be capitalized in titles
+	const lowercaseWords = new Set(['a', 'an', 'and', 'as', 'at', 'but', 'by', 'for', 'in', 'of', 'on', 'or', 'the', 'to', 'with']);
+
+	// Split by spaces and handle each word
+	const words = text.split(' ');
+	return words
+		.map((word, index) => {
+			// Keep punctuation
+			const hasTrailingPunctuation = /[,;:.]$/.test(word);
+			const cleanWord = word.replace(/[,;:.]$/, '');
+
+			// If it's a known acronym, keep it uppercase
+			if (keepUppercase.has(cleanWord)) {
+				return word;
+			}
+
+			// Check if it's likely a country/state code (2-3 uppercase letters)
+			if (cleanWord.length <= 3 && /^[A-Z]+$/.test(cleanWord)) {
+				return word;
+			}
+
+			// Convert to lowercase first
+			const lower = cleanWord.toLowerCase();
+
+			// Keep certain words lowercase unless they're the first word
+			if (index !== 0 && lowercaseWords.has(lower)) {
+				return hasTrailingPunctuation ? lower + word.slice(-1) : lower;
+			}
+
+			// Convert to title case
+			const titleCase = cleanWord.charAt(0).toUpperCase() + cleanWord.slice(1).toLowerCase();
+
+			return hasTrailingPunctuation ? titleCase + word.slice(-1) : titleCase;
+		})
+		.join(' ');
+}
+
+/**
+ * Pretty print extracted data for debugging
+ */
+function logExtractedData(data: PrefillJobData): void {
+	console.log('\n' + '='.repeat(80));
+	console.log('📋 EXTRACTED JOB DATA');
+	console.log('='.repeat(80));
+
+	if (data.job) {
+		console.log('\n🔹 Job Information:');
+		console.log(`  Title: ${truncate(data.job.title, 50)}`);
+		console.log(`  Type: ${data.job.type || '(not extracted)'}`);
+		console.log(`  Seniority: ${data.job.seniority?.join(', ') || '(not extracted)'}`);
+		console.log(`  Apply: ${truncate(data.job.appLinkOrEmail, 40)}`);
+		console.log(`  Deadline: ${data.job.applicationDeadline || '(not extracted)'}`);
+		if (data.job.description) {
+			const descLength = data.job.description.length;
+			console.log(`  Description: ${descLength} characters (Tiptap JSON format)`);
+		} else {
+			console.log(`  Description: (not extracted)`);
+		}
+	} else {
+		console.log('\n🔹 Job Information: (none extracted)');
+	}
+
+	console.log('\n🔹 Location Details:');
+	console.log(`  Type: ${data.locationType || '(not extracted)'}`);
+	console.log(`  City: ${truncate(data.city, 50)}`);
+	console.log(`  Country: ${data.country || '(not extracted)'}`);
+
+	if (data.hiringLocation?.type) {
+		console.log(`  Hiring: ${data.hiringLocation.type}`);
+		if (data.hiringLocation.type === 'timezone' && data.hiringLocation.timezones?.length) {
+			console.log(`  Timezones: ${data.hiringLocation.timezones.join(', ')}`);
+		}
+	} else {
+		console.log(`  Hiring: (not extracted)`);
+	}
+
+	if (data.workingPermits?.type) {
+		console.log('\n🔹 Working Permits:');
+		console.log(`  Type: ${data.workingPermits.type}`);
+		if (data.workingPermits.type === 'required' && data.workingPermits.permits?.length) {
+			console.log(`  Required: ${data.workingPermits.permits.join(', ')}`);
+		}
+	}
+
+	if (data.salary?.min || data.salary?.max) {
+		console.log('\n🔹 Salary:');
+		const min = data.salary.min ? `${data.salary.currency || 'USD'} ${data.salary.min.toLocaleString()}` : 'N/A';
+		const max = data.salary.max ? `${data.salary.currency || 'USD'} ${data.salary.max.toLocaleString()}` : 'N/A';
+		console.log(`  Range: ${min} - ${max}`);
+	}
+
+	if (data.organization) {
+		console.log('\n🔹 Organization:');
+		console.log(`  Name: ${truncate(data.organization.name, 50)}`);
+		console.log(`  URL: ${truncate(data.organization.url, 50)}`);
+		console.log(`  Logo: ${data.organization.logo ? 'Yes' : 'No'}`);
+	}
+
+	console.log('\n' + '='.repeat(80) + '\n');
+}
 
 /**
  * Takes any URL (does not have to be ATS-specific) and attempts to prefill job data from it.
@@ -201,14 +364,43 @@ export const submitPrefillJobFromURL = form(prefillFromURLSchema, async (data) =
 
 		const extractedData = scrapeResult.json as PrefillJobData;
 
+		// Ensure job object exists for description enrichment
+		if (!extractedData.job) {
+			extractedData.job = {};
+		}
+
+		// Normalize ALL CAPS text fields
+		if (extractedData.job?.title) {
+			extractedData.job.title = normalizeAllCaps(extractedData.job.title);
+		}
+		if (extractedData.city) {
+			extractedData.city = normalizeAllCaps(extractedData.city);
+		}
+		if (extractedData.organization?.name) {
+			extractedData.organization.name = normalizeAllCaps(extractedData.organization.name);
+		}
+
+		// Fix applicationDeadline format: convert ISO timestamp to YYYY-MM-DD
+		if (extractedData.job.applicationDeadline) {
+			try {
+				// Parse the date and extract just the date portion (YYYY-MM-DD)
+				const date = new Date(extractedData.job.applicationDeadline);
+				if (!isNaN(date.getTime())) {
+					// Format as YYYY-MM-DD
+					extractedData.job.applicationDeadline = date.toISOString().split('T')[0];
+				}
+			} catch (error) {
+				console.warn('Failed to parse applicationDeadline, leaving as-is:', error);
+			}
+		}
+
 		// Enrich the job description using AI if enabled and configured
 		// Note: We intentionally do NOT fallback to raw markdown because it's typically low quality.
 		// Better to leave the description empty for manual entry than to prefill with bad content.
 		if (
 			siteConfig.flags.enrichDescription &&
 			siteConfig.optionalEnv.openRouterApiKey &&
-			scrapeResult.markdown &&
-			extractedData.job
+			scrapeResult.markdown
 		) {
 			try {
 				const openrouter = await getOpenRouterClient();
@@ -267,6 +459,9 @@ Generate ONLY the HTML job description content, nothing else.`,
 			// Don't set description - leave it undefined
 		}
 
+		// Log extracted data for debugging
+		logExtractedData(extractedData);
+
 		// Analyze what fields were successfully extracted vs missing
 		const filledFields: string[] = [];
 		const missingFields: string[] = [];
@@ -308,6 +503,8 @@ Generate ONLY the HTML job description content, nothing else.`,
 
 		// Check location fields
 		if (extractedData.locationType) filledFields.push('locationType');
+		if (extractedData.city) filledFields.push('city');
+		if (extractedData.country) filledFields.push('country');
 		if (extractedData.hiringLocation?.type) filledFields.push('hiringLocation.type');
 		if (extractedData.workingPermits?.type) filledFields.push('workingPermits.type');
 

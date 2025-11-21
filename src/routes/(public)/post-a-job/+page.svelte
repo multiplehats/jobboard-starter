@@ -101,6 +101,8 @@
 		submitJobPosting.fields.job.seniority.set([]);
 		submitJobPosting.fields.job.applicationDeadline.set('');
 		submitJobPosting.fields.locationType.set('remote');
+		submitJobPosting.fields.city.set('');
+		submitJobPosting.fields.country.set('');
 		submitJobPosting.fields.hiringLocation.type.set('worldwide');
 		submitJobPosting.fields.hiringLocation.timezones.set([]);
 		submitJobPosting.fields.workingPermits.type.set('no-specific');
@@ -180,17 +182,15 @@
 			}
 		}
 
-		// Set application deadline
+		// Set application deadline (keep as YYYY-MM-DD format)
 		if (data.job?.applicationDeadline) {
 			setTimeout(() => {
 				try {
-					const deadline = parseDate(data.job!.applicationDeadline!);
-					submitJobPosting.fields.job.applicationDeadline.set(
-						deadline.toDate(getLocalTimeZone()).toISOString()
-					);
+					// The backend already sends it in YYYY-MM-DD format, just use it directly
+					submitJobPosting.fields.job.applicationDeadline.set(data.job!.applicationDeadline!);
 					prefilledFields.add('job.applicationDeadline');
 				} catch (e) {
-					console.error('Failed to parse deadline:', e);
+					console.error('Failed to set deadline:', e);
 				}
 			}, animationDelay);
 			animationDelay += delayIncrement;
@@ -201,6 +201,28 @@
 			setTimeout(() => {
 				submitJobPosting.fields.locationType.set(data.locationType!);
 				prefilledFields.add('locationType');
+			}, animationDelay);
+			animationDelay += delayIncrement;
+		}
+
+		// Set city
+		if (data.city) {
+			const cityInput = document.getElementById('location-city') as HTMLInputElement;
+			if (cityInput) {
+				magicalTextReveal(cityInput, data.city, {
+					delay: animationDelay,
+					charDelay: 20
+				});
+				prefilledFields.add('city');
+				animationDelay += delayIncrement;
+			}
+		}
+
+		// Set country
+		if (data.country) {
+			setTimeout(() => {
+				submitJobPosting.fields.country.set(data.country!);
+				prefilledFields.add('country');
 			}, animationDelay);
 			animationDelay += delayIncrement;
 		}

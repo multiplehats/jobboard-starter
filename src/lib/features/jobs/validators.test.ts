@@ -24,7 +24,7 @@ describe('Dynamic Job Validators', () => {
 	describe('Remote-First Preset', () => {
 		const schema = buildPublicJobPostingSchema(REMOTE_FIRST_PRESET);
 
-		it('allows remote job without location', () => {
+		it('allows remote job without city/country', () => {
 			const job = {
 				...baseJob,
 				locationType: 'remote',
@@ -36,7 +36,7 @@ describe('Dynamic Job Validators', () => {
 			expect(() => schema.parse(job)).not.toThrow();
 		});
 
-		it('requires location for onsite job', () => {
+		it('requires city and country for onsite job', () => {
 			const job = {
 				...baseJob,
 				locationType: 'onsite',
@@ -45,14 +45,15 @@ describe('Dynamic Job Validators', () => {
 				salary: { currency: 'USD' }
 			};
 
-			expect(() => schema.parse(job)).toThrow();
+			expect(() => schema.parse(job)).toThrow(/City is required/);
 		});
 
-		it('accepts onsite job with location', () => {
+		it('accepts onsite job with city and country', () => {
 			const job = {
 				...baseJob,
 				locationType: 'onsite',
-				location: 'San Francisco, CA, USA',
+				city: 'San Francisco, CA',
+				country: 'US',
 				hiringLocation: { type: 'worldwide', timezones: [] },
 				workingPermits: { type: 'no-specific', permits: [] },
 				salary: { currency: 'USD' }
@@ -61,7 +62,7 @@ describe('Dynamic Job Validators', () => {
 			expect(() => schema.parse(job)).not.toThrow();
 		});
 
-		it('requires location for hybrid job', () => {
+		it('requires city and country for hybrid job', () => {
 			const job = {
 				...baseJob,
 				locationType: 'hybrid',
@@ -70,7 +71,7 @@ describe('Dynamic Job Validators', () => {
 				salary: { currency: 'USD' }
 			};
 
-			expect(() => schema.parse(job)).toThrow();
+			expect(() => schema.parse(job)).toThrow(/City is required/);
 		});
 
 		it('requires timezones when hiring by timezone', () => {
@@ -97,11 +98,12 @@ describe('Dynamic Job Validators', () => {
 			expect(() => schema.parse(job)).not.toThrow();
 		});
 
-		it('rejects location over 255 characters', () => {
+		it('rejects city over 255 characters', () => {
 			const job = {
 				...baseJob,
 				locationType: 'onsite',
-				location: 'a'.repeat(256),
+				city: 'a'.repeat(256),
+				country: 'US',
 				hiringLocation: { type: 'worldwide', timezones: [] },
 				workingPermits: { type: 'no-specific', permits: [] },
 				salary: { currency: 'USD' }
@@ -109,26 +111,41 @@ describe('Dynamic Job Validators', () => {
 
 			expect(() => schema.parse(job)).toThrow(/under 255 characters/);
 		});
+
+		it('rejects invalid country code', () => {
+			const job = {
+				...baseJob,
+				locationType: 'onsite',
+				city: 'San Francisco',
+				country: 'USA', // Should be "US" (2 letters)
+				hiringLocation: { type: 'worldwide', timezones: [] },
+				workingPermits: { type: 'no-specific', permits: [] },
+				salary: { currency: 'USD' }
+			};
+
+			expect(() => schema.parse(job)).toThrow(/2-letter ISO code/);
+		});
 	});
 
 	describe('Local-Only Preset', () => {
 		const schema = buildPublicJobPostingSchema(LOCAL_ONLY_PRESET);
 
-		it('requires location for onsite job', () => {
+		it('requires city and country for onsite job', () => {
 			const job = {
 				...baseJob,
 				locationType: 'onsite',
 				salary: { currency: 'USD' }
 			};
 
-			expect(() => schema.parse(job)).toThrow();
+			expect(() => schema.parse(job)).toThrow(/City is required/);
 		});
 
-		it('accepts onsite job with location', () => {
+		it('accepts onsite job with city and country', () => {
 			const job = {
 				...baseJob,
 				locationType: 'onsite',
-				location: '123 Main St, New York, NY',
+				city: 'New York, NY',
+				country: 'US',
 				salary: { currency: 'USD' }
 			};
 
@@ -139,7 +156,8 @@ describe('Dynamic Job Validators', () => {
 			const job = {
 				...baseJob,
 				locationType: 'remote' as any, // Should fail - not allowed
-				location: 'New York',
+				city: 'New York',
+				country: 'US',
 				salary: { currency: 'USD' }
 			};
 
@@ -150,7 +168,8 @@ describe('Dynamic Job Validators', () => {
 			const job = {
 				...baseJob,
 				locationType: 'onsite',
-				location: 'New York',
+				city: 'New York',
+				country: 'US',
 				hiringLocation: { type: 'worldwide', timezones: [] }, // Should be ignored
 				salary: { currency: 'USD' }
 			};
@@ -163,7 +182,7 @@ describe('Dynamic Job Validators', () => {
 	describe('Hybrid-First Preset', () => {
 		const schema = buildPublicJobPostingSchema(HYBRID_FIRST_PRESET);
 
-		it('requires location for hybrid job', () => {
+		it('requires city and country for hybrid job', () => {
 			const job = {
 				...baseJob,
 				locationType: 'hybrid',
@@ -172,14 +191,15 @@ describe('Dynamic Job Validators', () => {
 				salary: { currency: 'USD' }
 			};
 
-			expect(() => schema.parse(job)).toThrow();
+			expect(() => schema.parse(job)).toThrow(/City is required/);
 		});
 
-		it('accepts hybrid job with location', () => {
+		it('accepts hybrid job with city and country', () => {
 			const job = {
 				...baseJob,
 				locationType: 'hybrid',
-				location: 'Austin, TX, USA',
+				city: 'Austin, TX',
+				country: 'US',
 				hiringLocation: { type: 'worldwide', timezones: [] },
 				workingPermits: { type: 'no-specific', permits: [] },
 				salary: { currency: 'USD' }
@@ -191,7 +211,8 @@ describe('Dynamic Job Validators', () => {
 		it('defaults to hybrid location type', () => {
 			const job = {
 				...baseJob,
-				location: 'Austin, TX',
+				city: 'Austin, TX',
+				country: 'US',
 				hiringLocation: { type: 'worldwide', timezones: [] },
 				workingPermits: { type: 'no-specific', permits: [] },
 				salary: { currency: 'USD' }

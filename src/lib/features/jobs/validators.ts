@@ -19,7 +19,8 @@ export const createJobSchema = z.object({
 	locationType: z.enum(LOCATION_TYPES, {
 		required_error: 'Location type is required'
 	}),
-	location: z.string().optional(),
+	city: z.string().max(255, 'City must be under 255 characters').optional(),
+	country: z.string().length(2, 'Country must be a 2-letter ISO code').optional(),
 	jobType: z.enum(JOB_TYPES, {
 		required_error: 'Job type is required'
 	}),
@@ -70,7 +71,8 @@ export const baseJobPostingSchema = z.object({
 			.refine((val) => !isNaN(Date.parse(val)), { message: 'Must be a valid date' })
 	}),
 	locationType: z.enum(LOCATION_TYPES),
-	location: z.string().max(255, 'Location must be under 255 characters').optional(),
+	city: z.string().max(255, 'City must be under 255 characters').optional(),
+	country: z.string().length(2, 'Country must be a 2-letter ISO code').optional(),
 	hiringLocation: z
 		.object({
 			type: z.enum(HIRING_LOCATION_TYPES).optional(),
@@ -128,20 +130,25 @@ export function buildPublicJobPostingSchema(config: import('$lib/config/jobs').J
 	const defaultType = config.defaultLocationType || config.allowedLocationTypes[0];
 	schemaFields.locationType = z.enum(allowedTypes).default(defaultType);
 
-	// Physical location - only include if not hidden
+	// Physical location (city + country) - only include if not hidden
 	if (config.fields.location.mode !== 'hidden') {
 		const locationMode = config.fields.location.mode;
 
 		if (locationMode === 'required') {
-			schemaFields.location = z
+			schemaFields.city = z
 				.string()
-				.min(1, 'Office location is required')
-				.max(255, 'Location must be under 255 characters');
+				.min(1, 'City is required')
+				.max(255, 'City must be under 255 characters');
+			schemaFields.country = z
+				.string()
+				.length(2, 'Country must be a 2-letter ISO code')
+				.min(1, 'Country is required');
 		} else {
 			// optional or conditional - will validate conditionally below
-			schemaFields.location = z
+			schemaFields.city = z.string().max(255, 'City must be under 255 characters').optional();
+			schemaFields.country = z
 				.string()
-				.max(255, 'Location must be under 255 characters')
+				.length(2, 'Country must be a 2-letter ISO code')
 				.optional();
 		}
 	}
@@ -207,25 +214,43 @@ export function buildPublicJobPostingSchema(config: import('$lib/config/jobs').J
 
 	// Add conditional validations
 
-	// 1. Location is required for onsite/hybrid when mode is 'conditional'
+	// 1. City and country are required for onsite/hybrid when mode is 'conditional'
 	if (config.fields.location.mode === 'conditional') {
-		schema = schema.refine(
-			(data) => {
-				if (data.locationType === 'onsite' || data.locationType === 'hybrid') {
-					return data.location && data.location.length > 0;
-				}
-				return true;
-			},
-			{
-				message: (data: any) => {
-					if (data.locationType === 'onsite') {
-						return 'Office location is required for onsite positions';
+		schema = schema
+			.refine(
+				(data) => {
+					if (data.locationType === 'onsite' || data.locationType === 'hybrid') {
+						return data.city && data.city.length > 0;
 					}
-					return 'Office location is required for hybrid positions';
+					return true;
 				},
-				path: ['location']
-			}
-		);
+				{
+					message: (data: any) => {
+						if (data.locationType === 'onsite') {
+							return 'City is required for onsite positions';
+						}
+						return 'City is required for hybrid positions';
+					},
+					path: ['city']
+				}
+			)
+			.refine(
+				(data) => {
+					if (data.locationType === 'onsite' || data.locationType === 'hybrid') {
+						return data.country && data.country.length > 0;
+					}
+					return true;
+				},
+				{
+					message: (data: any) => {
+						if (data.locationType === 'onsite') {
+							return 'Country is required for onsite positions';
+						}
+						return 'Country is required for hybrid positions';
+					},
+					path: ['country']
+				}
+			);
 	}
 
 	// 2. Timezones are required when hiringLocation type is 'timezone'

@@ -24,7 +24,7 @@ export type PublicJobPostingFields = typeof submitJobPosting.fields;
  * Now simplified to work directly with form fields - no intermediate state
  */
 export interface JobInformationSectionProps {
-	// Properly typed fields from RemoteForm - works directly with .value() and .set()
+	disableFields?: boolean;
 	fields: PublicJobPostingFields;
 }
 
@@ -33,7 +33,7 @@ export interface JobInformationSectionProps {
  * Handles company name, URL, logo, and customer email
  */
 export interface CompanyInformationSectionProps {
-	// Properly typed fields - includes both organization and customerEmail
+	disableFields?: boolean;
 	fields: PublicJobPostingFields;
 }
 
@@ -43,7 +43,7 @@ export interface CompanyInformationSectionProps {
  * Now simplified to work directly with form fields - no intermediate state
  */
 export interface LocationSectionProps {
-	// Properly typed fields - works directly with .value() and .set()
+	disableFields?: boolean;
 	fields: PublicJobPostingFields;
 }
 
@@ -53,7 +53,7 @@ export interface LocationSectionProps {
  * Now simplified to work directly with form fields - no intermediate state
  */
 export interface SalarySectionProps {
-	// Properly typed fields - works directly with .value() and .set()
+	disableFields?: boolean;
 	fields: PublicJobPostingFields;
 }
 
@@ -63,7 +63,7 @@ export interface SalarySectionProps {
  * Now simplified to work directly with form fields - no intermediate state
  */
 export interface WorkingPermitsSectionProps {
-	// Properly typed fields - works directly with .value() and .set()
+	disableFields?: boolean;
 	fields: PublicJobPostingFields;
 }
 

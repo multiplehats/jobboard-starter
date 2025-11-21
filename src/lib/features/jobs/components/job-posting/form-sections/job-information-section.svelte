@@ -19,7 +19,7 @@
 	import type { PublicJobPostingFields } from '../types';
 	import type { Editor, Content } from '@tiptap/core';
 
-	let { fields }: { fields: PublicJobPostingFields } = $props();
+	let { fields, disableFields }: { fields: PublicJobPostingFields } = $props();
 
 	// Job type options
 	const jobTypes = jobTypesList();
@@ -83,6 +83,7 @@
 					placeholder="e.g. Senior Software Engineer"
 					{...fields.job.title.as('text')}
 					aria-invalid={getFormFieldIssues(fields.job.title).length > 0}
+					disabled={disableFields}
 				/>
 				{#each getFormFieldIssues(fields.job.title) as issue, i (i)}
 					<Field.Error>{issue.message}</Field.Error>
@@ -105,6 +106,7 @@
 				<Select.Root
 					type="single"
 					value={selectedJobType}
+					disabled={disableFields}
 					onValueChange={(v) => {
 						if (v) fields.job.type.set(v as any);
 					}}
@@ -146,6 +148,7 @@
 							<Checkbox
 								id="seniority-{level.value}"
 								checked={selectedSeniority.includes(level.value)}
+								disabled={disableFields}
 								onchange={(e) => {
 									const target = e.currentTarget as HTMLInputElement;
 									let newSeniority = [...selectedSeniority];

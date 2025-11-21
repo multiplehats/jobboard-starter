@@ -58,38 +58,38 @@
 	let city = $state('');
 	let selectedCountries = $state<string[]>([]);
 
-	// Parse existing location value into city and country on mount
+	// Sync city state with form field
 	$effect(() => {
-		const currentLocation = fields.location?.value();
-		if (currentLocation && !city && selectedCountries.length === 0) {
-			// Try to parse location like "San Francisco, CA, USA" or "London, UK"
-			const parts = currentLocation.split(',').map((p: string) => p.trim());
-			if (parts.length >= 2) {
-				// Last part is likely country, everything else is city/region
-				const possibleCountry = parts[parts.length - 1];
-				// Simple heuristic: if last part is 2-3 chars (country code), use it
-				if (possibleCountry.length <= 3) {
-					selectedCountries = [possibleCountry];
-					city = parts.slice(0, -1).join(', ');
-				} else {
-					// Otherwise, just use first part as city
-					city = parts[0];
-				}
-			} else {
-				city = currentLocation;
+		const currentCity = fields.city?.value?.();
+		if (currentCity !== undefined && currentCity !== city) {
+			city = currentCity;
+		}
+	});
+
+	// Sync country state with form field
+	$effect(() => {
+		const currentCountry = fields.country?.value?.();
+		if (currentCountry !== undefined) {
+			const countryArray = currentCountry ? [currentCountry] : [];
+			if (JSON.stringify(countryArray) !== JSON.stringify(selectedCountries)) {
+				selectedCountries = countryArray;
 			}
 		}
 	});
 
-	// Update the location field when city or country changes
-	function updateLocationField() {
-		if (!fields.location) return;
+	// Update the city field when city changes
+	function updateCityField() {
+		if (fields.city) {
+			fields.city.set(city);
+		}
+	}
 
-		const countryName = selectedCountries.length > 0 ? getCountryName(selectedCountries[0]) : '';
-		const locationParts = [city, countryName].filter((part) => part && part.trim().length > 0);
-		const locationString = locationParts.join(', ');
-
-		fields.location.set(locationString);
+	// Update the country field when country changes
+	function updateCountryField() {
+		if (fields.country) {
+			const countryCode = selectedCountries.length > 0 ? selectedCountries[0] : '';
+			fields.country.set(countryCode);
+		}
 	}
 
 	// Show physical location input based on config and locationType
@@ -131,12 +131,13 @@
 		return 'Specify the physical location if applicable';
 	});
 
-	// Clear location field when switching to remote (if not conditional/required)
+	// Clear city and country fields when switching to remote (if not conditional/required)
 	$effect(() => {
-		if (selectedLocationType === 'remote' && fields.location) {
+		if (selectedLocationType === 'remote') {
 			const mode = config.fields.location.mode;
 			if (mode !== 'required' && mode !== 'conditional') {
-				fields.location.set('');
+				if (fields.city) fields.city.set('');
+				if (fields.country) fields.country.set('');
 				city = '';
 				selectedCountries = [];
 			}
@@ -190,10 +191,10 @@
 		{/if}
 
 		<!-- Physical Location (Office Address) -->
-		{#if showPhysicalLocation && fields.location}
+		{#if showPhysicalLocation}
 			<Field.Field
 				orientation="responsive"
-				data-invalid={getFormFieldIssues(fields.location).length > 0}
+				data-invalid={(fields.city && getFormFieldIssues(fields.city).length > 0) || (fields.country && getFormFieldIssues(fields.country).length > 0)}
 				class="grid grid-cols-1 gap-4 @[480px]/field-group:grid-cols-[2fr_3fr]"
 			>
 				<Field.Content>
@@ -211,7 +212,7 @@
 							value={city}
 							oninput={(e) => {
 								city = e.currentTarget.value;
-								updateLocationField();
+								updateCityField();
 							}}
 							class="flex-1"
 							aria-label="City"
@@ -221,7 +222,7 @@
 							multiple={false}
 							placeholder="Select country..."
 							class="flex-1"
-							onchange={updateLocationField}
+							onchange={updateCountryField}
 						/>
 					</div>
 
@@ -234,9 +235,16 @@
 						</p>
 					{/if}
 
-					{#each getFormFieldIssues(fields.location) as issue, i (i)}
-						<Field.Error>{issue.message}</Field.Error>
-					{/each}
+					{#if fields.city}
+						{#each getFormFieldIssues(fields.city) as issue, i (i)}
+							<Field.Error>{issue.message}</Field.Error>
+						{/each}
+					{/if}
+					{#if fields.country}
+						{#each getFormFieldIssues(fields.country) as issue, i (i)}
+							<Field.Error>{issue.message}</Field.Error>
+						{/each}
+					{/if}
 				</div>
 			</Field.Field>
 			{#if showHiringLocation}

@@ -53,7 +53,8 @@ export const jobs = pgTable(
 
 		// Job details
 		locationType: locationTypeEnum('location_type').notNull(),
-		location: varchar('location', { length: 255 }), // City, Country
+		city: varchar('city', { length: 255 }), // City/region (e.g., "San Francisco, CA")
+		country: varchar('country', { length: 3 }), // ISO 3166-1 alpha-2 or alpha-3 country code (e.g., "US", "UK", "NLD")
 		jobType: jobTypeEnum('job_type').notNull(),
 
 		// Salary

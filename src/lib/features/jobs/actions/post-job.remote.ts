@@ -1,4 +1,4 @@
-import { command, form } from '$app/server';
+import { form } from '$app/server';
 import { buildPublicJobPostingSchema } from '$lib/features/jobs/validators';
 import type { PublicJobPostingInput } from '$lib/features/jobs/validators';
 import { getJobBoardConfig } from '$lib/config/jobs/config.server';
@@ -17,11 +17,6 @@ export type SubmitJobOutput = {
  * This runs at request time, using the cached config
  */
 const getSchema = () => buildPublicJobPostingSchema(getJobBoardConfig());
-
-export const prefillFromATS = command(z.string(), async (atsUrl: string) => {
-	// TODO: Implement ATS prefill logic
-	console.log('Prefilling from ATS URL:', atsUrl);
-});
 
 /**
  * Submit a new public job posting

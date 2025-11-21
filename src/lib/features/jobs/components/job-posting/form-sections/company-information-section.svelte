@@ -4,7 +4,7 @@
 	import { getFormFieldIssues } from '$lib/utils/generators';
 	import type { CompanyInformationSectionProps } from '../types';
 
-	let { fields }: CompanyInformationSectionProps = $props();
+	let { fields, disableFields }: CompanyInformationSectionProps = $props();
 </script>
 
 <Field.Set>
@@ -26,6 +26,7 @@
 					placeholder="Your Company Inc."
 					{...fields.organization.name.as('text')}
 					aria-invalid={getFormFieldIssues(fields.organization.name).length > 0}
+					disabled={disableFields}
 				/>
 				{#each getFormFieldIssues(fields.organization.name) as issue, i (i)}
 					<Field.Error>{issue.message}</Field.Error>
@@ -48,6 +49,7 @@
 					{...fields.organization.url.as('text')}
 					type="url"
 					aria-invalid={getFormFieldIssues(fields.organization.url).length > 0}
+					disabled={disableFields}
 				/>
 				{#each getFormFieldIssues(fields.organization.url) as issue, i (i)}
 					<Field.Error>{issue.message}</Field.Error>
@@ -69,6 +71,7 @@
 					placeholder="https://yourcompany.com/logo.png"
 					{...fields.organization.logo.as('text')}
 					type="url"
+					disabled={disableFields}
 				/>
 			</div>
 		</Field.Field>
@@ -91,6 +94,7 @@
 					{...fields.customerEmail.as('text')}
 					type="email"
 					aria-invalid={getFormFieldIssues(fields.customerEmail).length > 0}
+					disabled={disableFields}
 				/>
 				{#each getFormFieldIssues(fields.customerEmail) as issue, i (i)}
 					<Field.Error>{issue.message}</Field.Error>
