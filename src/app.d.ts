@@ -1,4 +1,5 @@
 import type { AuthConfig, SessionObj, UserObj } from '$lib/server/auth';
+import type { SiteConfig } from '$lib/server/site-config';
 
 declare global {
 	namespace App {
@@ -8,7 +9,11 @@ declare global {
 			session?: SessionObj['session'];
 			getSession: AuthConfig['api']['getSession'];
 		}
-		// interface PageData {}
+		interface PageData {
+			config: {
+				flags: SiteConfig['flags'];
+			};
+		}
 		// interface PageState {}
 		// interface Platform {}
 	}

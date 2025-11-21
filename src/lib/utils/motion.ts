@@ -117,3 +117,105 @@ export const animations = {
 		}
 	})
 };
+
+/**
+ * Magical text reveal effect that types text character by character
+ * with a shimmer/glow effect
+ */
+export function magicalTextReveal(
+	element: HTMLInputElement | HTMLTextAreaElement,
+	text: string,
+	options: {
+		delay?: number;
+		charDelay?: number;
+		onComplete?: () => void;
+	} = {}
+) {
+	const { delay = 0, charDelay = 30, onComplete } = options;
+
+	// Clear existing value
+	element.value = '';
+
+	// Add a subtle glow effect during animation
+	const originalBoxShadow = element.style.boxShadow;
+	element.style.boxShadow = '0 0 0 2px rgba(139, 92, 246, 0.3), 0 0 20px rgba(139, 92, 246, 0.2)';
+	element.style.transition = 'box-shadow 0.3s ease';
+
+	// Start typing after delay
+	setTimeout(() => {
+		let currentIndex = 0;
+
+		const typeInterval = setInterval(() => {
+			if (currentIndex < text.length) {
+				element.value = text.substring(0, currentIndex + 1);
+				currentIndex++;
+
+				// Trigger input event so form state updates
+				element.dispatchEvent(new Event('input', { bubbles: true }));
+			} else {
+				clearInterval(typeInterval);
+
+				// Remove glow effect
+				setTimeout(() => {
+					element.style.boxShadow = originalBoxShadow;
+				}, 300);
+
+				onComplete?.();
+			}
+		}, charDelay);
+	}, delay);
+}
+
+/**
+ * Magical number count-up effect for numeric inputs
+ */
+export function magicalNumberReveal(
+	element: HTMLInputElement,
+	targetValue: number,
+	options: {
+		delay?: number;
+		duration?: number;
+		onComplete?: () => void;
+	} = {}
+) {
+	const { delay = 0, duration = 800, onComplete } = options;
+
+	// Add a subtle glow effect during animation
+	const originalBoxShadow = element.style.boxShadow;
+	element.style.boxShadow = '0 0 0 2px rgba(139, 92, 246, 0.3), 0 0 20px rgba(139, 92, 246, 0.2)';
+	element.style.transition = 'box-shadow 0.3s ease';
+
+	setTimeout(() => {
+		const startValue = 0;
+		const startTime = Date.now();
+
+		const animate = () => {
+			const elapsed = Date.now() - startTime;
+			const progress = Math.min(elapsed / duration, 1);
+
+			// Easing function (ease-out-cubic)
+			const eased = 1 - Math.pow(1 - progress, 3);
+			const currentValue = Math.floor(startValue + (targetValue - startValue) * eased);
+
+			element.value = currentValue.toString();
+			element.dispatchEvent(new Event('input', { bubbles: true }));
+
+			if (progress < 1) {
+				requestAnimationFrame(animate);
+			} else {
+				// Ensure final value is exact
+				element.value = targetValue.toString();
+				element.dispatchEvent(new Event('input', { bubbles: true }));
+
+				// Remove glow effect
+				setTimeout(() => {
+					element.style.boxShadow = originalBoxShadow;
+				}, 300);
+
+				onComplete?.();
+			}
+		};
+
+		requestAnimationFrame(animate);
+	}, delay);
+}

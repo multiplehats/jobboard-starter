@@ -1,6 +1,12 @@
-import { pgTable, text, varchar, integer, timestamp, json, index } from 'drizzle-orm/pg-core';
+import { pgTable, pgEnum, text, varchar, integer, timestamp, json, index } from 'drizzle-orm/pg-core';
 import { createBetterAuthId } from './utils';
 import { jobs } from './jobs';
+import { PAYMENT_STATUSES } from '$lib/features/common/constants';
+import { CURRENCIES } from '$lib/features/jobs/constants';
+
+// PostgreSQL Enums
+export const paymentStatusEnum = pgEnum('payment_status', PAYMENT_STATUSES);
+export const paymentCurrencyEnum = pgEnum('payment_currency', CURRENCIES);
 
 export const jobPayments = pgTable(
 	'job_payments',
@@ -21,14 +27,13 @@ export const jobPayments = pgTable(
 		basePrice: integer('base_price').notNull(),
 		upgradesPrice: integer('upgrades_price').default(0).notNull(),
 		totalPrice: integer('total_price').notNull(),
-		currency: varchar('currency', { length: 10 }).default('EUR').notNull(),
+		currency: paymentCurrencyEnum('currency').default('EUR').notNull(),
 
 		// Upgrades purchased
 		upgrades: json('upgrades').$type<string[]>(),
 
 		// Status
-		status: varchar('status', { length: 50 }).notNull().default('pending'),
-		// 'pending' | 'completed' | 'failed' | 'refunded'
+		status: paymentStatusEnum('status').notNull().default('pending'),
 
 		// Metadata
 		metadata: json('metadata'),

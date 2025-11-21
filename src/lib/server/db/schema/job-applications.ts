@@ -1,7 +1,11 @@
-import { pgTable, text, varchar, timestamp, json, index, unique } from 'drizzle-orm/pg-core';
+import { pgTable, pgEnum, text, varchar, timestamp, json, index, unique } from 'drizzle-orm/pg-core';
 import { createBetterAuthId } from './utils';
 import { user } from './auth';
 import { jobs } from './jobs';
+import { APPLICATION_STATUSES } from '$lib/features/common/constants';
+
+// PostgreSQL Enums
+export const applicationStatusEnum = pgEnum('application_status', APPLICATION_STATUSES);
 
 export const jobApplications = pgTable(
 	'job_applications',
@@ -18,7 +22,7 @@ export const jobApplications = pgTable(
 			.notNull(),
 
 		// Application tracking (3 stages)
-		status: varchar('status', { length: 50 }).notNull(), // 'modal_shown' | 'cta_clicked' | 'external_opened'
+		status: applicationStatusEnum('status').notNull(),
 
 		// Optional: if we implement in-app applications
 		coverLetter: text('cover_letter'),
@@ -39,6 +43,6 @@ export const jobApplications = pgTable(
 		userJobIdx: index('job_applications_user_job_idx').on(table.userId, table.jobId),
 		userIdx: index('job_applications_user_idx').on(table.userId),
 		jobIdx: index('job_applications_job_idx').on(table.jobId),
-		uniqueUserJob: unique('job_applications_user_job_unique').on(table.userId, table.jobId)
+		userJobUnique: unique('job_applications_user_job_unique').on(table.userId, table.jobId)
 	})
 );

@@ -31,13 +31,13 @@
 		<Logo wrapperClass="mb-6" />
 
 		<h1 class="mb-2 text-center text-2xl font-medium text-gray-900 md:mb-3 md:text-3xl">
-			{m['getStarted.TITLE']({
+			{m['get_started.title']({
 				appName: config.appName
 			})}
 		</h1>
 
 		<p class="text-md text-center text-gray-500 md:text-lg">
-			{m['getStarted.DESCRIPTION']({ appName: config.appName })}
+			{m['get_started.description']({ appName: config.appName })}
 		</p>
 	</div>
 	<div class="flex flex-col gap-5">
@@ -61,9 +61,9 @@
 						{/each}
 					</div>
 					<div class="flex flex-col gap-y-0.5 text-center select-none md:text-left">
-						<p class="font-medium">{m['getStarted.TALENT_TITLE']()}</p>
+						<p class="font-medium">{m['get_started.talent_title']()}</p>
 						<p class="text-sm text-gray-600">
-							{m['getStarted.TALENT_DESCRIPTION']()}
+							{m['get_started.talent_description']()}
 						</p>
 					</div>
 				</div>
@@ -87,20 +87,20 @@
 						{/each}
 					</div>
 					<div class="flex flex-col gap-y-0.5 text-center select-none md:text-left">
-						<p class="font-medium">{m['getStarted.RECRUITER_TITLE']()}</p>
+						<p class="font-medium">{m['get_started.recruiter_title']()}</p>
 						<p class="text-sm text-gray-600">
-							{m['getStarted.RECRUITER_DESCRIPTION']()}
+							{m['get_started.recruiter_description']()}
 						</p>
 					</div>
 				</div>
 			</label>
 		</RadioGroup.Root>
-		<Button onclick={handleContinue} class="w-full" size="lg">{m['getStarted.CONTINUE']()}</Button>
+		<Button onclick={handleContinue} class="w-full" size="lg">{m['get_started.continue']()}</Button>
 	</div>
 	<p class="text-center text-gray-600">
-		{m['getStarted.ALREADY_HAVE_ACCOUNT']()}
+		{m['get_started.already_have_account']()}
 		<a class="text-primary-700 font-medium" href={authRoutes.signIn()}
-			>{m['getStarted.SIGN_IN']()}</a
+			>{m['get_started.sign_in']()}</a
 		>
 	</p>
 </section>

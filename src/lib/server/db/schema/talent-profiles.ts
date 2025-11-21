@@ -1,6 +1,12 @@
-import { pgTable, text, varchar, integer, boolean, timestamp, json, index } from 'drizzle-orm/pg-core';
+import { pgTable, pgEnum, text, varchar, integer, boolean, timestamp, json, index } from 'drizzle-orm/pg-core';
 import { createBetterAuthId } from './utils';
 import { user } from './auth';
+import { PROFILE_VISIBILITY } from '$lib/features/common/constants';
+import { CURRENCIES } from '$lib/features/jobs/constants';
+
+// PostgreSQL Enums
+export const profileVisibilityEnum = pgEnum('profile_visibility', PROFILE_VISIBILITY);
+export const desiredSalaryCurrencyEnum = pgEnum('desired_salary_currency', CURRENCIES);
 
 export const talentProfiles = pgTable(
 	'talent_profiles',
@@ -23,7 +29,7 @@ export const talentProfiles = pgTable(
 		desiredJobTypes: json('desired_job_types').$type<string[]>(), // ['full_time', 'contract']
 		desiredLocationTypes: json('desired_location_types').$type<string[]>(), // ['remote', 'hybrid']
 		desiredSalaryMin: integer('desired_salary_min'),
-		desiredSalaryCurrency: varchar('desired_salary_currency', { length: 10 }).default('USD'),
+		desiredSalaryCurrency: desiredSalaryCurrencyEnum('desired_salary_currency').default('USD'),
 
 		// Experience
 		yearsOfExperience: integer('years_of_experience'),
@@ -38,7 +44,7 @@ export const talentProfiles = pgTable(
 
 		// Settings
 		jobAlertsEnabled: boolean('job_alerts_enabled').default(true).notNull(),
-		profileVisibility: varchar('profile_visibility', { length: 20 }).default('public').notNull(), // 'public' | 'private'
+		profileVisibility: profileVisibilityEnum('profile_visibility').default('public').notNull(),
 		emailNotifications: boolean('email_notifications').default(true).notNull(),
 
 		// Onboarding

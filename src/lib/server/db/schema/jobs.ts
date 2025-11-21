@@ -1,5 +1,6 @@
 import {
 	pgTable,
+	pgEnum,
 	text,
 	varchar,
 	integer,
@@ -12,6 +13,26 @@ import {
 import { sql } from 'drizzle-orm';
 import { createBetterAuthId } from './utils';
 import { user, organization } from './auth';
+import {
+	LOCATION_TYPES,
+	JOB_TYPES,
+	JOB_STATUSES,
+	SENIORITY_LEVELS,
+	HIRING_LOCATION_TYPES,
+	WORKING_PERMITS_TYPES,
+	CURRENCIES,
+	SALARY_PERIODS
+} from '$lib/features/jobs/constants';
+
+// PostgreSQL Enums (using constants from shared file)
+export const locationTypeEnum = pgEnum('location_type', LOCATION_TYPES);
+export const jobTypeEnum = pgEnum('job_type', JOB_TYPES);
+export const jobStatusEnum = pgEnum('job_status', JOB_STATUSES);
+export const seniorityLevelEnum = pgEnum('seniority_level', SENIORITY_LEVELS);
+export const hiringLocationTypeEnum = pgEnum('hiring_location_type', HIRING_LOCATION_TYPES);
+export const workingPermitsTypeEnum = pgEnum('working_permits_type', WORKING_PERMITS_TYPES);
+export const currencyEnum = pgEnum('currency', CURRENCIES);
+export const salaryPeriodEnum = pgEnum('salary_period', SALARY_PERIODS);
 
 export const jobs = pgTable(
 	'jobs',
@@ -31,15 +52,15 @@ export const jobs = pgTable(
 		benefits: json('benefits'),
 
 		// Job details
-		locationType: varchar('location_type', { length: 50 }).notNull(), // 'remote' | 'hybrid' | 'onsite'
+		locationType: locationTypeEnum('location_type').notNull(),
 		location: varchar('location', { length: 255 }), // City, Country
-		jobType: varchar('job_type', { length: 50 }).notNull(), // 'full_time' | 'part_time' | 'contract' | 'freelance'
+		jobType: jobTypeEnum('job_type').notNull(),
 
 		// Salary
 		salaryMin: integer('salary_min'),
 		salaryMax: integer('salary_max'),
-		salaryCurrency: varchar('salary_currency', { length: 10 }).default('USD'),
-		salaryPeriod: varchar('salary_period', { length: 20 }).default('year'), // 'year' | 'month' | 'hour'
+		salaryCurrency: currencyEnum('salary_currency').default('USD').notNull(),
+		salaryPeriod: salaryPeriodEnum('salary_period').default('year').notNull(),
 
 		// Application
 		applicationUrl: text('application_url').notNull(),
@@ -54,16 +75,15 @@ export const jobs = pgTable(
 			.notNull(),
 
 		// Status workflow
-		status: varchar('status', { length: 50 }).notNull().default('draft'),
-		// 'draft' | 'awaiting_payment' | 'awaiting_approval' | 'published' | 'rejected' | 'expired'
+		status: jobStatusEnum('status').notNull().default('draft'),
 
 		// Payment
 		paymentId: varchar('payment_id', { length: 255 }),
 		paidAt: timestamp('paid_at'),
 
-		// Upgrades
-		hasNewsletterFeature: boolean('has_newsletter_feature').default(false).notNull(),
-		hasExtendedDuration: boolean('has_extended_duration').default(false).notNull(),
+		// Upgrades (flexible - stores array of purchased upsell IDs from pricing config)
+		// Example: ["email_newsletter", "priority_placement"]
+		selectedUpsells: json('selected_upsells').$type<string[]>().default(sql`'[]'::json`).notNull(),
 
 		// Lifecycle
 		publishedAt: timestamp('published_at'),

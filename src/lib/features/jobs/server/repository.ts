@@ -2,7 +2,8 @@ import { db } from '$lib/server/db/index.js';
 import { jobs, organization } from '$lib/server/db/schema.js';
 import { eq, and, sql } from 'drizzle-orm';
 import type { InferSelectModel, InferInsertModel } from 'drizzle-orm';
-import { generateJobUrl as generateJobUrlShared } from '../utils.js';
+import { generateJobUrl as generateJobUrlShared } from '$lib/features/jobs/utils.js';
+import type { LocationType, JobType, JobStatus } from '$lib/features/jobs/constants.js';
 
 /**
  * Job Types
@@ -21,10 +22,10 @@ export type JobWithOrg = Job & {
  * Job Filters for querying published jobs
  */
 export interface JobFilters {
-	locationType?: string;
-	jobType?: string;
+	locationType?: LocationType;
+	jobType?: JobType;
 	organizationId?: string;
-	status?: string;
+	status?: JobStatus;
 	limit?: number;
 	offset?: number;
 }

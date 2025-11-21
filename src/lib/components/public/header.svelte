@@ -40,7 +40,7 @@
 			},
 			logoPosition: {
 				left: {
-					container: 'justify-start',
+					container: 'justify-between',
 					logo: ''
 				},
 				center: {
@@ -233,7 +233,7 @@
 					{/if}
 
 					<Button href={routes.postJob()} variant="ghost" class="hidden md:inline-flex" size="sm">
-						{m.POST_A_JOB()}
+						{m.post_a_job()}
 					</Button>
 
 					<Button
@@ -242,7 +242,7 @@
 						class="hidden sm:inline-flex"
 						size="sm"
 					>
-						{m['auth.SIGN_UP']()}
+						{m['auth.sign_up']()}
 					</Button>
 				</div>
 			{/if}

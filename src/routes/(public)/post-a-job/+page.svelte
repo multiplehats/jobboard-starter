@@ -1,20 +1,16 @@
 <script lang="ts">
-	import { submitJobPosting, type JobPostingFormData } from './post-job.remote';
-
+	import { submitJobPosting } from '$lib/features/jobs/actions/post-job.remote.js';
 	import * as Field from '$lib/components/ui/field/index.js';
 	import { Input } from '$lib/components/ui/input/index.js';
 	import * as Select from '$lib/components/ui/select/index.js';
 	import { Checkbox } from '$lib/components/ui/checkbox/index.js';
 	import { Button } from '$lib/components/ui/button/index.js';
 	import * as RadioGroup from '$lib/components/ui/radio-group/index.js';
-	import { Container } from '$lib/components/ui/container/index.js';
 	import { Heading } from '$lib/components/ui/heading/index.js';
 	import { Slider } from '$lib/components/ui/slider/index.js';
 	import { Calendar } from '$lib/components/ui/calendar/index.js';
 	import * as Popover from '$lib/components/ui/popover/index.js';
-	import * as Card from '$lib/components/ui/card/index.js';
 	import { Badge } from '$lib/components/ui/badge/index.js';
-	import { Separator } from '$lib/components/ui/separator/index.js';
 	import * as Section from '$lib/components/ui/section';
 	import * as Intro from '$lib/components/ui/intro';
 	import { EdraEditor, EdraDragHandleExtended } from '$lib/components/edra/shadcn';
@@ -26,38 +22,44 @@
 	import CalendarIcon from '@lucide/svelte/icons/calendar';
 	import CheckCircleIcon from '@lucide/svelte/icons/check-circle';
 
-	import { getLocalTimeZone, today, type CalendarDate } from '@internationalized/date';
+	import { getLocalTimeZone, today, parseDate, type CalendarDate } from '@internationalized/date';
 	import type { Content, Editor } from '@tiptap/core';
-	import { Wrapper } from '$lib/components/ui/wrapper';
+	import {
+		jobTypesList,
+		seniorityLevelsList,
+		locationTypesList,
+		CURRENCIES,
+		type JobType,
+		type SeniorityLevel
+	} from '$lib/features/jobs/constants';
+	import PrefillFromUrlAction from '$lib/features/jobs/components/prefill-from-url-action.svelte';
+	import type { PrefillResult } from '$lib/features/jobs/actions/prefill-from-url.remote';
+	import { page } from '$app/state';
+	import { getFormFieldIssues } from '$lib/utils/generators';
+	import { magicalTextReveal, magicalNumberReveal } from '$lib/utils/motion';
+	import { tick } from 'svelte';
+	import { PersistedState } from 'runed';
+	import { toast } from 'svelte-sonner';
+	import type { PageData } from './$types';
 
-	// Job type options
-	const jobTypes = [
-		'Full Time',
-		'Part Time',
-		'Contractor',
-		'Temporary',
-		'Intern',
-		'Volunteer',
-		'Other'
-	] as const;
-	const seniorityLevels = [
-		'Entry-level',
-		'Mid-level',
-		'Senior',
-		'Manager',
-		'Director',
-		'Executive'
-	] as const;
-	const locationTypes = [
-		{ value: 'remote', label: 'Remote' },
-		{ value: 'hybrid', label: 'Hybrid' },
-		{ value: 'onsite', label: 'On-site' }
-	] as const;
-	const currencies = ['USD', 'EUR', 'GBP', 'CAD', 'AUD'] as const;
+	// Get page data (includes pricing config)
+	let { data }: { data: PageData } = $props();
+
+	// Pricing configuration from server
+	const pricing = data.pricing;
+	const BASE_PRICE = pricing.basePriceUSD;
+	const CURRENCY = pricing.currency;
+	const ENABLED_UPSELLS = pricing.upsells.filter((u) => u.enabled);
+
+	// Job type options (generated from constants)
+	const jobTypes = jobTypesList();
+	const seniorityLevels = seniorityLevelsList();
+	const locationTypes = locationTypesList();
+	const currencies = CURRENCIES;
 
 	// Form state
-	let selectedJobType = $state<(typeof jobTypes)[number]>();
-	let selectedSeniority = $state<Array<(typeof seniorityLevels)[number]>>([]);
+	let selectedJobType = $state<JobType>();
+	let selectedSeniority = $state<SeniorityLevel[]>([]);
 	let selectedLocationType = $state('remote');
 	let selectedHiringLocationType = $state('worldwide');
 	let selectedWorkingPermitsType = $state('no-specific');
@@ -65,7 +67,9 @@
 	let salaryRange = $state([50000, 150000]);
 	let applicationDeadline = $state<CalendarDate | undefined>();
 	let deadlinePopoverOpen = $state(false);
-	let featureInEmails = $state(false);
+
+	// Track selected upsells (map of upsell ID -> boolean)
+	let selectedUpsells = $state<Set<string>>(new Set());
 
 	// Editor state for job description
 	let jobDescriptionEditor = $state<Editor>();
@@ -73,6 +77,7 @@
 	let jobDescriptionJSON = $state('');
 
 	const previewData = $derived.by(() => {
+		const jobTypeLabel = jobTypes.find((t) => t.value === selectedJobType)?.label || 'Full Time';
 		return {
 			companyName: submitJobPosting.fields.organization.name.value() || 'Your Company Inc.',
 			jobTitle: submitJobPosting.fields.job.title.value() || 'Job Title',
@@ -81,7 +86,7 @@
 				submitJobPosting.fields.salary.max.value() ?? 0
 			],
 			currency: submitJobPosting.fields.salary.currency.value() || 'USD',
-			jobType: selectedJobType || 'Full Time'
+			jobType: jobTypeLabel
 		};
 	});
 
@@ -101,10 +106,41 @@
 		applicationDeadline ? applicationDeadline.toDate(getLocalTimeZone()).toISOString() : ''
 	);
 
-	// Helper to safely get field issues
-	function getIssues(field: any) {
-		return field?.issues?.() ?? [];
-	}
+	// Prefill state
+	let prefilledFields = $state<Set<string>>(new Set());
+	let isPrefilling = $state(false);
+
+	// Persisted state for draft saving
+	type DraftData = {
+		selectedJobType?: JobType;
+		selectedSeniority: SeniorityLevel[];
+		selectedLocationType: string;
+		selectedHiringLocationType: string;
+		selectedWorkingPermitsType: string;
+		selectedCurrency: string;
+		salaryRange: [number, number];
+		applicationDeadline?: string;
+		jobDescriptionJSON: string;
+		selectedUpsells: string[];
+		formValues: Record<string, unknown>;
+	};
+
+	const draftState = new PersistedState<DraftData>('job-posting-draft', {
+		selectedJobType: undefined,
+		selectedSeniority: [],
+		selectedLocationType: 'remote',
+		selectedHiringLocationType: 'worldwide',
+		selectedWorkingPermitsType: 'no-specific',
+		selectedCurrency: 'USD',
+		salaryRange: [50000, 150000],
+		applicationDeadline: undefined,
+		jobDescriptionJSON: '',
+		selectedUpsells: [],
+		formValues: {}
+	});
+
+	let hasLoadedDraft = $state(false);
+	let autoSaveTimeout: ReturnType<typeof setTimeout> | null = null;
 
 	// Handler for editor updates
 	function onJobDescriptionUpdate() {
@@ -115,474 +151,999 @@
 		}
 	}
 
-	// Pricing calculations
-	const BASE_PRICE = 99;
-	const EMAIL_FEATURE_PRICE = 50;
+	// Handler for prefill reset
+	function handlePrefillReset() {
+		// Clear all form fields that were prefilled
+		prefilledFields.clear();
+		prefilledFields = new Set(); // Trigger reactivity
+
+		// Reset form state
+		selectedJobType = undefined;
+		selectedSeniority = [];
+		selectedLocationType = 'remote';
+		selectedHiringLocationType = 'worldwide';
+		selectedWorkingPermitsType = 'no-specific';
+		selectedCurrency = 'USD';
+		salaryRange = [50000, 150000];
+		applicationDeadline = undefined;
+
+		// Clear editor content
+		if (jobDescriptionEditor && !jobDescriptionEditor.isDestroyed) {
+			jobDescriptionEditor.commands.clearContent();
+			jobDescriptionJSON = '';
+		}
+
+		// Note: Remote forms don't have a reset method, so we manually clear fields
+	}
+
+	// Handler for prefill success
+	async function handlePrefillSuccess(result: PrefillResult) {
+		if (!result.success || !result.data) return;
+
+		isPrefilling = true;
+		const data = result.data;
+		let animationDelay = 0;
+		const delayIncrement = 150; // Stagger animations
+
+		// Wait for next tick to ensure elements are rendered
+		await tick();
+
+		// Animate job title
+		if (data.job?.title) {
+			const titleInput = document.getElementById('job-title') as HTMLInputElement;
+			if (titleInput) {
+				magicalTextReveal(titleInput, data.job.title, {
+					delay: animationDelay,
+					charDelay: 20
+				});
+				prefilledFields.add('job.title');
+				animationDelay += delayIncrement;
+			}
+		}
+
+		// Set job type
+		if (data.job?.type) {
+			const jobType = data.job.type;
+			setTimeout(() => {
+				selectedJobType = jobType;
+				prefilledFields.add('job.type');
+			}, animationDelay);
+			animationDelay += delayIncrement;
+		}
+
+		// Set seniority levels
+		if (data.job?.seniority && data.job.seniority.length > 0) {
+			const seniority = data.job.seniority;
+			setTimeout(() => {
+				selectedSeniority = seniority;
+				prefilledFields.add('job.seniority');
+			}, animationDelay);
+			animationDelay += delayIncrement;
+		}
+
+		// Animate job description (set editor content)
+		if (data.job?.description && jobDescriptionEditor) {
+			setTimeout(() => {
+				if (jobDescriptionEditor && !jobDescriptionEditor.isDestroyed) {
+					// Set as HTML or plain text
+					jobDescriptionEditor.commands.setContent(data.job!.description!);
+					onJobDescriptionUpdate();
+					prefilledFields.add('job.description');
+				}
+			}, animationDelay);
+			animationDelay += delayIncrement;
+		}
+
+		// Animate application link/email
+		if (data.job?.appLinkOrEmail) {
+			const appInput = document.getElementById('job-application') as HTMLInputElement;
+			if (appInput) {
+				magicalTextReveal(appInput, data.job.appLinkOrEmail, {
+					delay: animationDelay,
+					charDelay: 15
+				});
+				prefilledFields.add('job.appLinkOrEmail');
+				animationDelay += delayIncrement;
+			}
+		}
+
+		// Set application deadline
+		if (data.job?.applicationDeadline) {
+			setTimeout(() => {
+				try {
+					applicationDeadline = parseDate(data.job!.applicationDeadline!);
+					prefilledFields.add('job.applicationDeadline');
+				} catch (e) {
+					console.error('Failed to parse deadline:', e);
+				}
+			}, animationDelay);
+			animationDelay += delayIncrement;
+		}
+
+		// Set location type
+		if (data.locationType) {
+			setTimeout(() => {
+				selectedLocationType = data.locationType!;
+				prefilledFields.add('locationType');
+			}, animationDelay);
+			animationDelay += delayIncrement;
+		}
+
+		// Set hiring location
+		if (data.hiringLocation?.type) {
+			setTimeout(() => {
+				selectedHiringLocationType = data.hiringLocation!.type!;
+				prefilledFields.add('hiringLocation.type');
+			}, animationDelay);
+			animationDelay += delayIncrement;
+		}
+
+		// Set working permits
+		if (data.workingPermits?.type) {
+			setTimeout(() => {
+				selectedWorkingPermitsType = data.workingPermits!.type!;
+				prefilledFields.add('workingPermits.type');
+			}, animationDelay);
+			animationDelay += delayIncrement;
+		}
+
+		// Animate salary range
+		if (data.salary?.min !== undefined || data.salary?.max !== undefined) {
+			setTimeout(() => {
+				if (data.salary?.min !== undefined) {
+					salaryRange[0] = data.salary.min;
+					prefilledFields.add('salary.min');
+				}
+				if (data.salary?.max !== undefined) {
+					salaryRange[1] = data.salary.max;
+					prefilledFields.add('salary.max');
+				}
+				// Trigger reactivity
+				salaryRange = [...salaryRange];
+			}, animationDelay);
+			animationDelay += delayIncrement;
+		}
+
+		// Set currency
+		if (data.salary?.currency) {
+			setTimeout(() => {
+				selectedCurrency = data.salary!.currency!;
+				prefilledFields.add('salary.currency');
+			}, animationDelay);
+			animationDelay += delayIncrement;
+		}
+
+		// Animate company name
+		if (data.organization?.name) {
+			const companyInput = document.getElementById('company-name') as HTMLInputElement;
+			if (companyInput) {
+				magicalTextReveal(companyInput, data.organization.name, {
+					delay: animationDelay,
+					charDelay: 20
+				});
+				prefilledFields.add('organization.name');
+				animationDelay += delayIncrement;
+			}
+		}
+
+		// Animate company URL
+		if (data.organization?.url) {
+			const urlInput = document.getElementById('company-url') as HTMLInputElement;
+			if (urlInput) {
+				magicalTextReveal(urlInput, data.organization.url, {
+					delay: animationDelay,
+					charDelay: 15
+				});
+				prefilledFields.add('organization.url');
+				animationDelay += delayIncrement;
+			}
+		}
+
+		// Animate company logo
+		if (data.organization?.logo) {
+			const logoInput = document.getElementById('company-logo') as HTMLInputElement;
+			if (logoInput) {
+				magicalTextReveal(logoInput, data.organization.logo, {
+					delay: animationDelay,
+					charDelay: 15,
+					onComplete: () => {
+						isPrefilling = false;
+					}
+				});
+				prefilledFields.add('organization.logo');
+			}
+		} else {
+			// If no logo, end the prefilling state
+			setTimeout(() => {
+				isPrefilling = false;
+			}, animationDelay);
+		}
+	}
+
+	// Load draft on mount
+	$effect(() => {
+		if (!hasLoadedDraft && draftState.current) {
+			const draft = draftState.current;
+
+			// Restore state
+			if (draft.selectedJobType) selectedJobType = draft.selectedJobType;
+			if (draft.selectedSeniority) selectedSeniority = draft.selectedSeniority;
+			if (draft.selectedLocationType) selectedLocationType = draft.selectedLocationType;
+			if (draft.selectedHiringLocationType) selectedHiringLocationType = draft.selectedHiringLocationType;
+			if (draft.selectedWorkingPermitsType) selectedWorkingPermitsType = draft.selectedWorkingPermitsType;
+			if (draft.selectedCurrency) selectedCurrency = draft.selectedCurrency;
+			if (draft.salaryRange) salaryRange = draft.salaryRange;
+			if (draft.applicationDeadline) {
+				try {
+					applicationDeadline = parseDate(draft.applicationDeadline);
+				} catch (e) {
+					console.error('Failed to restore deadline:', e);
+				}
+			}
+			if (draft.selectedUpsells) selectedUpsells = new Set(draft.selectedUpsells);
+
+			// Restore form values (for text inputs)
+			if (draft.formValues) {
+				Object.entries(draft.formValues).forEach(([key, value]) => {
+					// Use the remote function's field setter if available
+					const field = (submitJobPosting as any).fields;
+					if (field && typeof value === 'string') {
+						// Navigate the nested structure
+						const keys = key.split('.');
+						let current = field;
+						for (let i = 0; i < keys.length - 1; i++) {
+							current = current[keys[i]];
+						}
+						const lastKey = keys[keys.length - 1];
+						if (current[lastKey]?.value) {
+							current[lastKey].value.set(value);
+						}
+					}
+				});
+			}
+
+			// Restore editor content
+			if (draft.jobDescriptionJSON && jobDescriptionEditor && !jobDescriptionEditor.isDestroyed) {
+				try {
+					jobDescriptionEditor.commands.setContent(JSON.parse(draft.jobDescriptionJSON));
+					jobDescriptionJSON = draft.jobDescriptionJSON;
+				} catch (e) {
+					console.error('Failed to restore editor content:', e);
+				}
+			}
+
+			hasLoadedDraft = true;
+		}
+	});
+
+	// Auto-save function with debouncing
+	function saveDraft() {
+		// Clear any pending save
+		if (autoSaveTimeout) {
+			clearTimeout(autoSaveTimeout);
+		}
+
+		autoSaveTimeout = setTimeout(() => {
+			// Collect all form field values
+			const formValues: Record<string, unknown> = {};
+
+			// Helper to collect field values recursively
+			const collectFieldValues = (obj: any, prefix = ''): void => {
+				if (!obj || typeof obj !== 'object') return;
+
+				Object.entries(obj).forEach(([key, value]) => {
+					const path = prefix ? `${prefix}.${key}` : key;
+
+					if (value && typeof value === 'object' && 'value' in value) {
+						// It's a field with a value property
+						const fieldValue = (value as any).value?.();
+						if (fieldValue !== undefined && fieldValue !== null) {
+							formValues[path] = fieldValue;
+						}
+					} else if (value && typeof value === 'object') {
+						// Recurse into nested objects
+						collectFieldValues(value, path);
+					}
+				});
+			};
+
+			collectFieldValues((submitJobPosting as any).fields);
+
+			draftState.current = {
+				selectedJobType,
+				selectedSeniority,
+				selectedLocationType,
+				selectedHiringLocationType,
+				selectedWorkingPermitsType,
+				selectedCurrency,
+				salaryRange: [salaryRange[0], salaryRange[1]] as [number, number],
+				applicationDeadline: applicationDeadline?.toString(),
+				jobDescriptionJSON,
+				selectedUpsells: Array.from(selectedUpsells),
+				formValues
+			};
+		}, 500); // Debounce for 500ms
+	}
+
+	// Watch for changes and trigger auto-save
+	$effect(() => {
+		// Track all reactive dependencies
+		selectedJobType;
+		selectedSeniority;
+		selectedLocationType;
+		selectedHiringLocationType;
+		selectedWorkingPermitsType;
+		selectedCurrency;
+		salaryRange;
+		applicationDeadline;
+		jobDescriptionJSON;
+		selectedUpsells;
+
+		// Don't save on initial load
+		if (hasLoadedDraft) {
+			saveDraft();
+		}
+	});
+
+	// Handle Save Draft button click
+	function handleSaveDraft() {
+		// Force immediate save
+		if (autoSaveTimeout) {
+			clearTimeout(autoSaveTimeout);
+		}
+
+		// Collect all form field values
+		const formValues: Record<string, unknown> = {};
+		const collectFieldValues = (obj: any, prefix = ''): void => {
+			if (!obj || typeof obj !== 'object') return;
+
+			Object.entries(obj).forEach(([key, value]) => {
+				const path = prefix ? `${prefix}.${key}` : key;
+
+				if (value && typeof value === 'object' && 'value' in value) {
+					const fieldValue = (value as any).value?.();
+					if (fieldValue !== undefined && fieldValue !== null) {
+						formValues[path] = fieldValue;
+					}
+				} else if (value && typeof value === 'object') {
+					collectFieldValues(value, path);
+				}
+			});
+		};
+
+		collectFieldValues((submitJobPosting as any).fields);
+
+		draftState.current = {
+			selectedJobType,
+			selectedSeniority,
+			selectedLocationType,
+			selectedHiringLocationType,
+			selectedWorkingPermitsType,
+			selectedCurrency,
+			salaryRange: [salaryRange[0], salaryRange[1]] as [number, number],
+			applicationDeadline: applicationDeadline?.toString(),
+			jobDescriptionJSON,
+			selectedUpsells: Array.from(selectedUpsells),
+			formValues
+		};
+
+		toast.success('Draft saved successfully!', {
+			description: 'Your progress has been saved and will be restored when you return.'
+		});
+	}
+
+	// Calculate total price based on selected upsells
+	const totalPrice = $derived.by(() => {
+		let total = BASE_PRICE;
+		ENABLED_UPSELLS.forEach((upsell) => {
+			if (selectedUpsells.has(upsell.id)) {
+				total += upsell.priceUSD;
+			}
+		});
+		return total;
+	});
 </script>
 
 <Intro.Root>
 	<Intro.Title>Post a Job</Intro.Title>
 	<Intro.Description>
-		Your job post will be pinned to the top and highlighted in relevant search results for 30 days.
+		Your job post will be pinned to the top and highlighted in relevant search results for {pricing.defaultDuration} days.
 	</Intro.Description>
 </Intro.Root>
 
 <Section.Root>
 	<Section.Content animate={true} animateDelay={0.45}>
-		<form {...submitJobPosting} class="w-full space-y-8">
-			<div class="space-y-4">
-				<Field.Group title="Job Information" description="Basic details about the position">
-					<!-- Job Title -->
-					<Field.Field data-invalid={getIssues(submitJobPosting.fields.job.title).length > 0}>
-						<Field.Label for="job-title">Job Title *</Field.Label>
-						<Input
-							id="job-title"
-							placeholder="e.g. Senior Software Engineer"
-							{...submitJobPosting.fields.job.title.as('text')}
-							aria-invalid={getIssues(submitJobPosting.fields.job.title).length > 0}
-						/>
-						<Field.Description>Maximum 80 characters</Field.Description>
-						{#each getIssues(submitJobPosting.fields.job.title) as issue, i (i)}
-							<Field.Error>{issue.message}</Field.Error>
-						{/each}
-					</Field.Field>
+		{#if page.data.config.flags.prefillJobFromURL}
+			<PrefillFromUrlAction
+				title="Prefill from ATS or Job URL"
+				description="Save time by pasting a job URL. We automatically extract job details for you."
+				onSuccess={handlePrefillSuccess}
+				onReset={handlePrefillReset}
+			/>
+		{/if}
 
-					<!-- Job Type -->
-					<Field.Field data-invalid={getIssues(submitJobPosting.fields.job.type).length > 0}>
-						<Field.Label for="job-type">Job Type *</Field.Label>
-						<Select.Root type="single" bind:value={selectedJobType}>
-							<Select.Trigger id="job-type">
-								{#if selectedJobType}
-									{selectedJobType}
-								{:else}
-									Select job type
-								{/if}
-							</Select.Trigger>
-							<Select.Content>
-								{#each jobTypes as type (type)}
-									<Select.Item value={type}>{type}</Select.Item>
+		<form {...submitJobPosting} class="w-full">
+			<Field.Group>
+				<Field.Set>
+					<Field.Legend>Job Information</Field.Legend>
+					<Field.Description>Basic details about the position</Field.Description>
+					<Field.Separator />
+					<Field.Group class="@container/field-group">
+						<!-- Job Title -->
+						<Field.Field
+							orientation="responsive"
+							data-invalid={getFormFieldIssues(submitJobPosting.fields.job.title).length > 0}
+							class="grid grid-cols-1 gap-4 @[480px]/field-group:grid-cols-[2fr_3fr]"
+						>
+							<Field.Content>
+								<Field.Label for="job-title">Job Title *</Field.Label>
+								<Field.Description>Maximum 80 characters</Field.Description>
+							</Field.Content>
+							<div class="flex flex-col gap-2">
+								<Input
+									id="job-title"
+									placeholder="e.g. Senior Software Engineer"
+									{...submitJobPosting.fields.job.title.as('text')}
+									aria-invalid={getFormFieldIssues(submitJobPosting.fields.job.title).length > 0}
+								/>
+								{#each getFormFieldIssues(submitJobPosting.fields.job.title) as issue, i (i)}
+									<Field.Error>{issue.message}</Field.Error>
 								{/each}
-							</Select.Content>
-						</Select.Root>
-						<input
-							{...submitJobPosting.fields.job.type.as('text')}
-							type="hidden"
-							value={selectedJobType}
-						/>
-						{#each getIssues(submitJobPosting.fields.job.type) as issue, i (i)}
-							<Field.Error>{issue.message}</Field.Error>
-						{/each}
-					</Field.Field>
+							</div>
+						</Field.Field>
+						<Field.Separator />
 
-					<!-- Seniority Levels -->
-					<Field.Field data-invalid={getIssues(submitJobPosting.fields.job.seniority).length > 0}>
-						<Field.Label>Seniority Level(s) *</Field.Label>
-						<Field.Description>Select all that apply</Field.Description>
-						<Field.Group class="gap-3">
-							{#each seniorityLevels as level (level)}
-								<Field.Field orientation="horizontal">
-									<Checkbox
-										id="seniority-{level}"
-										checked={selectedSeniority.includes(level)}
-										onchange={(e) => {
-											if (e.currentTarget?.checked) {
-												selectedSeniority = [...selectedSeniority, level];
-											} else {
-												selectedSeniority = selectedSeniority.filter((s) => s !== level);
-											}
-										}}
+						<!-- Job Type -->
+						<Field.Field
+							orientation="responsive"
+							data-invalid={getFormFieldIssues(submitJobPosting.fields.job.type).length > 0}
+							class="grid grid-cols-1 gap-4 @[480px]/field-group:grid-cols-[2fr_3fr]"
+						>
+							<Field.Content>
+								<Field.Label for="job-type">Job Type *</Field.Label>
+							</Field.Content>
+							<div class="flex flex-col gap-2">
+								<Select.Root type="single" bind:value={selectedJobType}>
+									<Select.Trigger id="job-type">
+										{#if selectedJobType}
+											{jobTypes.find((t) => t.value === selectedJobType)?.label ?? selectedJobType}
+										{:else}
+											Select job type
+										{/if}
+									</Select.Trigger>
+									<Select.Content>
+										{#each jobTypes as type (type.value)}
+											<Select.Item value={type.value}>{type.label}</Select.Item>
+										{/each}
+									</Select.Content>
+								</Select.Root>
+								<input
+									{...submitJobPosting.fields.job.type.as('text')}
+									type="hidden"
+									value={selectedJobType}
+								/>
+								{#each getFormFieldIssues(submitJobPosting.fields.job.type) as issue, i (i)}
+									<Field.Error>{issue.message}</Field.Error>
+								{/each}
+							</div>
+						</Field.Field>
+						<Field.Separator />
+
+						<!-- Seniority Levels -->
+						<Field.Field
+							orientation="responsive"
+							data-invalid={getFormFieldIssues(submitJobPosting.fields.job.seniority).length > 0}
+							class="grid grid-cols-1 gap-4 @[480px]/field-group:grid-cols-[2fr_3fr]"
+						>
+							<Field.Content>
+								<Field.Label>Seniority Level(s) *</Field.Label>
+								<Field.Description>Select all that apply</Field.Description>
+							</Field.Content>
+							<div class="flex flex-col gap-2">
+								<Field.Group class="gap-3">
+									{#each seniorityLevels as level (level.value)}
+										<Field.Field orientation="horizontal">
+											<Checkbox
+												id="seniority-{level.value}"
+												checked={selectedSeniority.includes(level.value)}
+												onchange={(e) => {
+													const target = e.currentTarget as HTMLInputElement;
+													if (target.checked) {
+														selectedSeniority = [...selectedSeniority, level.value];
+													} else {
+														selectedSeniority = selectedSeniority.filter((s) => s !== level.value);
+													}
+												}}
+											/>
+											<Field.Label for="seniority-{level.value}" class="font-normal">
+												{level.label}
+											</Field.Label>
+										</Field.Field>
+									{/each}
+								</Field.Group>
+								<input
+									{...submitJobPosting.fields.job.seniority.as('select multiple')}
+									type="hidden"
+									value={JSON.stringify(selectedSeniority)}
+								/>
+								{#each getFormFieldIssues(submitJobPosting.fields.job.seniority) as issue, i (i)}
+									<Field.Error>{issue.message}</Field.Error>
+								{/each}
+							</div>
+						</Field.Field>
+						<Field.Separator />
+
+						<!-- Job Description -->
+						<Field.Field
+							orientation="responsive"
+							data-invalid={getFormFieldIssues(submitJobPosting.fields.job.description).length > 0}
+							class="grid grid-cols-1 gap-4 @[480px]/field-group:grid-cols-[2fr_3fr]"
+						>
+							<Field.Content>
+								<Field.Label for="job-description">Job Description *</Field.Label>
+								<Field.Description>Provide a detailed description of the position</Field.Description>
+							</Field.Content>
+							<div class="flex flex-col gap-2">
+								<div
+									id="job-description"
+									class="rounded-md border border-input bg-background"
+									aria-invalid={getFormFieldIssues(submitJobPosting.fields.job.description).length > 0}
+								>
+									{#if jobDescriptionEditor && !jobDescriptionEditor.isDestroyed}
+										<JobDescriptionToolbar
+											class="w-full overflow-x-auto border-b bg-secondary/50 p-1"
+											editor={jobDescriptionEditor}
+										/>
+										<EdraDragHandleExtended editor={jobDescriptionEditor} />
+									{/if}
+									<EdraEditor
+										bind:editor={jobDescriptionEditor}
+										content={jobDescriptionContent}
+										class="max-h-[400px] min-h-[200px] overflow-y-auto px-6 pr-2"
+										onUpdate={onJobDescriptionUpdate}
 									/>
-									<Field.Label for="seniority-{level}" class="font-normal">
-										{level}
-									</Field.Label>
-								</Field.Field>
-							{/each}
-						</Field.Group>
-						<input
-							{...submitJobPosting.fields.job.seniority.as('text')}
-							type="hidden"
-							value={JSON.stringify(selectedSeniority)}
-						/>
-						{#each getIssues(submitJobPosting.fields.job.seniority) as issue, i (i)}
-							<Field.Error>{issue.message}</Field.Error>
-						{/each}
-					</Field.Field>
-
-					<!-- Job Description -->
-					<Field.Field data-invalid={getIssues(submitJobPosting.fields.job.description).length > 0}>
-						<Field.Label for="job-description">Job Description *</Field.Label>
-						<div
-							id="job-description"
-							class="rounded-md border border-input bg-background"
-							aria-invalid={getIssues(submitJobPosting.fields.job.description).length > 0}
-						>
-							{#if jobDescriptionEditor && !jobDescriptionEditor.isDestroyed}
-								<JobDescriptionToolbar
-									class="w-full overflow-x-auto border-b bg-secondary/50 p-1"
-									editor={jobDescriptionEditor}
+								</div>
+								<input
+									{...submitJobPosting.fields.job.description.as('text')}
+									type="hidden"
+									value={jobDescriptionJSON}
 								/>
-								<EdraDragHandleExtended editor={jobDescriptionEditor} />
-							{/if}
-							<EdraEditor
-								bind:editor={jobDescriptionEditor}
-								content={jobDescriptionContent}
-								class="max-h-[400px] min-h-[200px] overflow-y-auto px-6 pr-2"
-								onUpdate={onJobDescriptionUpdate}
-							/>
-						</div>
-						<input
-							type="hidden"
-							{...submitJobPosting.fields.job.description.as('text')}
-							value={jobDescriptionJSON}
-						/>
-						<Field.Description>Provide a detailed description of the position</Field.Description>
-						{#each getIssues(submitJobPosting.fields.job.description) as issue, i (i)}
-							<Field.Error>{issue.message}</Field.Error>
-						{/each}
-					</Field.Field>
+								{#each getFormFieldIssues(submitJobPosting.fields.job.description) as issue, i (i)}
+									<Field.Error>{issue.message}</Field.Error>
+								{/each}
+							</div>
+						</Field.Field>
+						<Field.Separator />
 
-					<!-- Application Method -->
-					<Field.Field
-						data-invalid={getIssues(submitJobPosting.fields.job.appLinkOrEmail).length > 0}
-					>
-						<Field.Label for="job-application">Application Link or Email *</Field.Label>
-						<Input
-							id="job-application"
-							placeholder="https://careers.company.com/apply or jobs@company.com"
-							{...submitJobPosting.fields.job.appLinkOrEmail.as('text')}
-							aria-invalid={getIssues(submitJobPosting.fields.job.appLinkOrEmail).length > 0}
-						/>
-						<Field.Description
-							>Enter a URL or email address where candidates can apply</Field.Description
+						<!-- Application Method -->
+						<Field.Field
+							orientation="responsive"
+							data-invalid={getFormFieldIssues(submitJobPosting.fields.job.appLinkOrEmail).length > 0}
+							class="grid grid-cols-1 gap-4 @[480px]/field-group:grid-cols-[2fr_3fr]"
 						>
-						{#each getIssues(submitJobPosting.fields.job.appLinkOrEmail) as issue, i (i)}
-							<Field.Error>{issue.message}</Field.Error>
-						{/each}
-					</Field.Field>
-
-					<!-- Application Deadline -->
-					<Field.Field
-						data-invalid={getIssues(submitJobPosting.fields.job.applicationDeadline).length > 0}
-					>
-						<Field.Label for="job-deadline">Application Deadline *</Field.Label>
-						<Popover.Root bind:open={deadlinePopoverOpen}>
-							<Popover.Trigger id="job-deadline">
-								{#snippet child({ props })}
-									<Button
-										{...props}
-										variant="outline"
-										class="w-full justify-start font-normal"
-										aria-invalid={getIssues(submitJobPosting.fields.job.applicationDeadline)
-											.length > 0}
-									>
-										<CalendarIcon class="mr-2 size-4" />
-										{deadlineLabel}
-									</Button>
-								{/snippet}
-							</Popover.Trigger>
-							<Popover.Content class="w-auto overflow-hidden p-0" align="start">
-								<Calendar
-									type="single"
-									bind:value={applicationDeadline}
-									captionLayout="dropdown"
-									onValueChange={() => {
-										deadlinePopoverOpen = false;
-									}}
-									minValue={today(getLocalTimeZone())}
+							<Field.Content>
+								<Field.Label for="job-application">Application Link or Email *</Field.Label>
+								<Field.Description
+									>Enter a URL or email address where candidates can apply</Field.Description
+								>
+							</Field.Content>
+							<div class="flex flex-col gap-2">
+								<Input
+									id="job-application"
+									placeholder="https://careers.company.com/apply or jobs@company.com"
+									{...submitJobPosting.fields.job.appLinkOrEmail.as('text')}
+									aria-invalid={getFormFieldIssues(submitJobPosting.fields.job.appLinkOrEmail).length >
+										0}
 								/>
-							</Popover.Content>
-						</Popover.Root>
-						<input
-							{...submitJobPosting.fields.job.applicationDeadline.as('text')}
-							type="hidden"
-							value={deadlineValue}
-						/>
-						<Field.Description>Select the last day candidates can apply</Field.Description>
-						{#each getIssues(submitJobPosting.fields.job.applicationDeadline) as issue, i (i)}
-							<Field.Error>{issue.message}</Field.Error>
-						{/each}
-					</Field.Field>
-				</Field.Group>
-			</div>
-
-			<!-- Location Section -->
-			<div class="space-y-4">
-				<Field.Group
-					title="Location & Work Arrangement"
-					description="Specify where and how the work will be performed"
-				>
-					<!-- Location Type -->
-					<Field.Field>
-						<Field.Label for="location-type">Location Type *</Field.Label>
-						<RadioGroup.Root bind:value={selectedLocationType}>
-							{#each locationTypes as locType (locType.value)}
-								<Field.Field orientation="horizontal">
-									<RadioGroup.Item value={locType.value} id="location-{locType.value}" />
-									<Field.Label for="location-{locType.value}" class="font-normal">
-										{locType.label}
-									</Field.Label>
-								</Field.Field>
-							{/each}
-						</RadioGroup.Root>
-						<input
-							{...submitJobPosting.fields.locationType.as('text')}
-							type="hidden"
-							value={selectedLocationType}
-						/>
-					</Field.Field>
-
-					<!-- Hiring Location Type -->
-					<Field.Field>
-						<Field.Label>Hiring Location *</Field.Label>
-						<RadioGroup.Root bind:value={selectedHiringLocationType}>
-							<Field.Field orientation="horizontal">
-								<RadioGroup.Item value="worldwide" id="hiring-worldwide" />
-								<Field.Label for="hiring-worldwide" class="font-normal">
-									Worldwide - Hire from anywhere
-								</Field.Label>
-							</Field.Field>
-							<Field.Field orientation="horizontal">
-								<RadioGroup.Item value="timezone" id="hiring-timezone" />
-								<Field.Label for="hiring-timezone" class="font-normal">
-									Specific Timezones
-								</Field.Label>
-							</Field.Field>
-						</RadioGroup.Root>
-						<input
-							{...submitJobPosting.fields.hiringLocation.type.as('text')}
-							type="hidden"
-							value={selectedHiringLocationType}
-						/>
-					</Field.Field>
-
-					{#if selectedHiringLocationType === 'timezone'}
-						<Field.Field>
-							<Field.Label for="timezones">Allowed Timezones</Field.Label>
-							<Input
-								id="timezones"
-								placeholder="e.g., America/New_York, Europe/London (comma separated)"
-								{...submitJobPosting.fields.hiringLocation.timezones.as('text')}
-							/>
-							<Field.Description>Enter timezone identifiers separated by commas</Field.Description>
+								{#each getFormFieldIssues(submitJobPosting.fields.job.appLinkOrEmail) as issue, i (i)}
+									<Field.Error>{issue.message}</Field.Error>
+								{/each}
+							</div>
 						</Field.Field>
-					{/if}
-				</Field.Group>
-			</div>
+						<Field.Separator />
 
-			<!-- Working Permits Section -->
-			<div class="space-y-4">
-				<Field.Group
-					title="Working Permits"
-					description="Specify any visa or work permit requirements"
-				>
-					<Field.Field>
-						<RadioGroup.Root bind:value={selectedWorkingPermitsType}>
-							<Field.Field orientation="horizontal">
-								<RadioGroup.Item value="no-specific" id="permits-none" />
-								<Field.Label for="permits-none" class="font-normal">
-									No specific requirements
-								</Field.Label>
-							</Field.Field>
-							<Field.Field orientation="horizontal">
-								<RadioGroup.Item value="required" id="permits-required" />
-								<Field.Label for="permits-required" class="font-normal">
-									Specific permits required
-								</Field.Label>
-							</Field.Field>
-						</RadioGroup.Root>
-						<input
-							{...submitJobPosting.fields.workingPermits.type.as('text')}
-							type="hidden"
-							value={selectedWorkingPermitsType}
-						/>
-					</Field.Field>
-
-					{#if selectedWorkingPermitsType === 'required'}
-						<Field.Field>
-							<Field.Label for="required-permits">Required Permits</Field.Label>
-							<Input
-								id="required-permits"
-								placeholder="e.g., US Work Authorization, EU Work Permit (comma separated)"
-								{...submitJobPosting.fields.workingPermits.permits.as('text')}
-							/>
-							<Field.Description>Enter required permits separated by commas</Field.Description>
+						<!-- Application Deadline -->
+						<Field.Field
+							orientation="responsive"
+							data-invalid={getFormFieldIssues(submitJobPosting.fields.job.applicationDeadline)
+								.length > 0}
+							class="grid grid-cols-1 gap-4 @[480px]/field-group:grid-cols-[2fr_3fr]"
+						>
+							<Field.Content>
+								<Field.Label for="job-deadline">Application Deadline *</Field.Label>
+								<Field.Description>Select the last day candidates can apply</Field.Description>
+							</Field.Content>
+							<div class="flex flex-col gap-2">
+								<Popover.Root bind:open={deadlinePopoverOpen}>
+									<Popover.Trigger id="job-deadline">
+										{#snippet child({ props })}
+											<Button
+												{...props}
+												variant="outline"
+												class="w-full justify-start font-normal"
+												aria-invalid={getFormFieldIssues(
+													submitJobPosting.fields.job.applicationDeadline
+												).length > 0}
+											>
+												<CalendarIcon class="mr-2 size-4" />
+												{deadlineLabel}
+											</Button>
+										{/snippet}
+									</Popover.Trigger>
+									<Popover.Content class="w-auto overflow-hidden p-0" align="start">
+										<Calendar
+											type="single"
+											bind:value={applicationDeadline}
+											captionLayout="dropdown"
+											onValueChange={() => {
+												deadlinePopoverOpen = false;
+											}}
+											minValue={today(getLocalTimeZone())}
+										/>
+									</Popover.Content>
+								</Popover.Root>
+								<input
+									{...submitJobPosting.fields.job.applicationDeadline.as('text')}
+									type="hidden"
+									value={deadlineValue}
+								/>
+								{#each getFormFieldIssues(submitJobPosting.fields.job.applicationDeadline) as issue, i (i)}
+									<Field.Error>{issue.message}</Field.Error>
+								{/each}
+							</div>
 						</Field.Field>
-					{/if}
-				</Field.Group>
-			</div>
+					</Field.Group>
+				</Field.Set>
+				<Field.Separator />
+				<Field.Set>
+					<Field.Legend>Location & Work Arrangement</Field.Legend>
+					<Field.Description>Specify where and how the work will be performed</Field.Description>
+					<Field.Separator />
+					<Field.Group class="@container/field-group">
+						<!-- Location Type -->
+						<Field.Field orientation="responsive" class="grid grid-cols-1 gap-4 @[480px]/field-group:grid-cols-[2fr_3fr]">
+							<Field.Content>
+								<Field.Label for="location-type">Location Type *</Field.Label>
+							</Field.Content>
+							<div class="flex flex-col gap-2">
+								<RadioGroup.Root bind:value={selectedLocationType}>
+									{#each locationTypes as locType (locType.value)}
+										<Field.Field orientation="horizontal">
+											<RadioGroup.Item value={locType.value} id="location-{locType.value}" />
+											<Field.Label for="location-{locType.value}" class="font-normal">
+												{locType.label}
+											</Field.Label>
+										</Field.Field>
+									{/each}
+								</RadioGroup.Root>
+								<input
+									{...submitJobPosting.fields.locationType.as('text')}
+									type="hidden"
+									value={selectedLocationType}
+								/>
+							</div>
+						</Field.Field>
+						<Field.Separator />
 
-			<!-- Salary Section -->
-			<div class="space-y-4">
-				<Field.Group
-					title="Salary Range"
-					description="Optionally specify the annual salary range for this position"
-				>
-					<div class="grid md:grid-cols-4">
-						<Field.Field class="md:col-span-3">
-							<div class="flex items-center gap-x-4">
+						<!-- Hiring Location Type -->
+						<Field.Field orientation="responsive" class="grid grid-cols-1 gap-4 @[480px]/field-group:grid-cols-[2fr_3fr]">
+							<Field.Content>
+								<Field.Label>Hiring Location *</Field.Label>
+							</Field.Content>
+							<div class="flex flex-col gap-2">
+								<RadioGroup.Root bind:value={selectedHiringLocationType}>
+									<Field.Field orientation="horizontal">
+										<RadioGroup.Item value="worldwide" id="hiring-worldwide" />
+										<Field.Label for="hiring-worldwide" class="font-normal">
+											Worldwide - Hire from anywhere
+										</Field.Label>
+									</Field.Field>
+									<Field.Field orientation="horizontal">
+										<RadioGroup.Item value="timezone" id="hiring-timezone" />
+										<Field.Label for="hiring-timezone" class="font-normal">
+											Specific Timezones
+										</Field.Label>
+									</Field.Field>
+								</RadioGroup.Root>
+								<input
+									{...submitJobPosting.fields.hiringLocation.type.as('text')}
+									type="hidden"
+									value={selectedHiringLocationType}
+								/>
+							</div>
+						</Field.Field>
+
+						{#if selectedHiringLocationType === 'timezone'}
+							<Field.Separator />
+							<Field.Field orientation="responsive" class="grid grid-cols-1 gap-4 @[480px]/field-group:grid-cols-[2fr_3fr]">
+								<Field.Content>
+									<Field.Label for="timezones">Allowed Timezones</Field.Label>
+									<Field.Description>Enter timezone identifiers separated by commas</Field.Description>
+								</Field.Content>
+								<div class="flex flex-col gap-2">
+									<Input
+										id="timezones"
+										placeholder="e.g., America/New_York, Europe/London (comma separated)"
+										{...submitJobPosting.fields.hiringLocation.timezones.as('select multiple')}
+									/>
+								</div>
+							</Field.Field>
+						{/if}
+					</Field.Group>
+				</Field.Set>
+				<Field.Separator />
+				<Field.Set>
+					<Field.Legend>Working Permits</Field.Legend>
+					<Field.Description>Specify any visa or work permit requirements</Field.Description>
+					<Field.Separator />
+					<Field.Group class="@container/field-group">
+						<Field.Field orientation="responsive" class="grid grid-cols-1 gap-4 @[480px]/field-group:grid-cols-[2fr_3fr]">
+							<Field.Content>
+								<Field.Label>Working Permits Type *</Field.Label>
+							</Field.Content>
+							<div class="flex flex-col gap-2">
+								<RadioGroup.Root bind:value={selectedWorkingPermitsType}>
+									<Field.Field orientation="horizontal">
+										<RadioGroup.Item value="no-specific" id="permits-none" />
+										<Field.Label for="permits-none" class="font-normal">
+											No specific requirements
+										</Field.Label>
+									</Field.Field>
+									<Field.Field orientation="horizontal">
+										<RadioGroup.Item value="required" id="permits-required" />
+										<Field.Label for="permits-required" class="font-normal">
+											Specific permits required
+										</Field.Label>
+									</Field.Field>
+								</RadioGroup.Root>
+								<input
+									{...submitJobPosting.fields.workingPermits.type.as('text')}
+									type="hidden"
+									value={selectedWorkingPermitsType}
+								/>
+							</div>
+						</Field.Field>
+
+						{#if selectedWorkingPermitsType === 'required'}
+							<Field.Separator />
+							<Field.Field orientation="responsive" class="grid grid-cols-1 gap-4 @[480px]/field-group:grid-cols-[2fr_3fr]">
+								<Field.Content>
+									<Field.Label for="required-permits">Required Permits</Field.Label>
+									<Field.Description>Enter required permits separated by commas</Field.Description>
+								</Field.Content>
+								<div class="flex flex-col gap-2">
+									<Input
+										id="required-permits"
+										placeholder="e.g., US Work Authorization, EU Work Permit (comma separated)"
+										{...submitJobPosting.fields.workingPermits.permits.as('select multiple')}
+									/>
+								</div>
+							</Field.Field>
+						{/if}
+					</Field.Group>
+				</Field.Set>
+				<Field.Separator />
+				<Field.Set>
+					<Field.Legend>Salary Range</Field.Legend>
+					<Field.Description>Optionally specify the annual salary range for this position</Field.Description>
+					<Field.Separator />
+					<Field.Group class="@container/field-group">
+						<Field.Field orientation="responsive" class="grid grid-cols-1 gap-4 @[480px]/field-group:grid-cols-[2fr_3fr]">
+							<Field.Content>
 								<Field.Label>Annual Salary Range</Field.Label>
 								<Field.Description>
 									${salaryRange[0].toLocaleString()} - ${salaryRange[1].toLocaleString()}
 									{selectedCurrency}
 									per year
 								</Field.Description>
-							</div>
-
-							<Slider
-								type="multiple"
-								bind:value={salaryRange}
-								max={500000}
-								min={0}
-								step={5000}
-								class="mt-2 w-full"
-								aria-label="Salary Range"
-							/>
-							<input
-								{...submitJobPosting.fields.salary.min.as('number')}
-								type="hidden"
-								value={salaryRange[0]}
-							/>
-
-							<input
-								{...submitJobPosting.fields.salary.max.as('number')}
-								type="hidden"
-								value={salaryRange[1]}
-							/>
-							{#each getIssues(submitJobPosting.fields.salary.min) as issue, i (i)}
-								<Field.Error>{issue.message}</Field.Error>
-							{/each}
-							{#each getIssues(submitJobPosting.fields.salary.max) as issue, i (i)}
-								<Field.Error>{issue.message}</Field.Error>
-							{/each}
-						</Field.Field>
-
-						<Field.Field class="mt-4 md:mt-0 md:ml-4">
-							<Field.Label for="salary-currency">Currency</Field.Label>
-							<Select.Root type="single" bind:value={selectedCurrency}>
-								<Select.Trigger id="salary-currency">
-									{currencyLabel}
-								</Select.Trigger>
-								<Select.Content>
-									{#each currencies as currency (currency)}
-										<Select.Item value={currency}>{currency}</Select.Item>
-									{/each}
-								</Select.Content>
-							</Select.Root>
-							<input
-								{...submitJobPosting.fields.salary.currency.as('text')}
-								type="hidden"
-								value={selectedCurrency}
-							/>
-						</Field.Field>
-					</div>
-				</Field.Group>
-			</div>
-
-			<!-- Company Information Section -->
-			<div class="space-y-4">
-				<Field.Group title="Company Information" description="Details about your organization">
-					<Field.Field
-						data-invalid={getIssues(submitJobPosting.fields.organization.name).length > 0}
-					>
-						<Field.Label for="company-name">Company Name *</Field.Label>
-						<Input
-							id="company-name"
-							placeholder="Your Company Inc."
-							{...submitJobPosting.fields.organization.name.as('text')}
-							aria-invalid={getIssues(submitJobPosting.fields.organization.name).length > 0}
-						/>
-						{#each getIssues(submitJobPosting.fields.organization.name) as issue, i (i)}
-							<Field.Error>{issue.message}</Field.Error>
-						{/each}
-					</Field.Field>
-
-					<Field.Field
-						data-invalid={getIssues(submitJobPosting.fields.organization.url).length > 0}
-					>
-						<Field.Label for="company-url">Company Website *</Field.Label>
-						<Input
-							id="company-url"
-							placeholder="https://yourcompany.com"
-							{...submitJobPosting.fields.organization.url.as('text')}
-							type="url"
-							aria-invalid={getIssues(submitJobPosting.fields.organization.url).length > 0}
-						/>
-						{#each getIssues(submitJobPosting.fields.organization.url) as issue, i (i)}
-							<Field.Error>{issue.message}</Field.Error>
-						{/each}
-					</Field.Field>
-
-					<Field.Field>
-						<Field.Label for="company-logo">Company Logo URL</Field.Label>
-						<Input
-							id="company-logo"
-							placeholder="https://yourcompany.com/logo.png"
-							{...submitJobPosting.fields.organization.logo.as('text')}
-							type="url"
-						/>
-						<Field.Description>Optional: URL to your company logo</Field.Description>
-					</Field.Field>
-
-					<Field.Field data-invalid={getIssues(submitJobPosting.fields.customerEmail).length > 0}>
-						<Field.Label for="customer-email">Your Email *</Field.Label>
-						<Input
-							id="customer-email"
-							placeholder="you@company.com"
-							{...submitJobPosting.fields.customerEmail.as('text')}
-							type="email"
-							aria-invalid={getIssues(submitJobPosting.fields.customerEmail).length > 0}
-						/>
-						<Field.Description
-							>We'll send payment confirmation and job posting updates here</Field.Description
-						>
-						{#each getIssues(submitJobPosting.fields.customerEmail) as issue, i (i)}
-							<Field.Error>{issue.message}</Field.Error>
-						{/each}
-					</Field.Field>
-				</Field.Group>
-			</div>
-
-			<!-- Upgrades Section -->
-			<div class="space-y-4">
-				<Field.Group title="Upgrades" description="Enhance your job posting visibility">
-					<div
-						class="rounded-lg border p-4 transition-colors hover:border-primary/50 hover:bg-accent/50"
-					>
-						<Field.Field orientation="horizontal" class="items-start gap-3">
-							<Checkbox id="feature-in-emails" bind:checked={featureInEmails} class="mt-1" />
-							<Field.Content class="space-y-1">
-								<Field.Label for="feature-in-emails" class="text-base leading-none font-semibold">
-									Feature in Email Newsletter
-									<Badge variant="secondary" class="ml-2">+${EMAIL_FEATURE_PRICE}</Badge>
-								</Field.Label>
-								<Field.Description class="text-sm">
-									Include your job posting in our weekly newsletter sent to thousands of job seekers
-								</Field.Description>
 							</Field.Content>
+							<div class="flex flex-col gap-2">
+								<Slider
+									type="multiple"
+									bind:value={salaryRange}
+									max={500000}
+									min={0}
+									step={5000}
+									class="w-full"
+									aria-label="Salary Range"
+								/>
+								<input
+									{...submitJobPosting.fields.salary.min.as('number')}
+									type="hidden"
+									value={salaryRange[0]}
+								/>
+								<input
+									{...submitJobPosting.fields.salary.max.as('number')}
+									type="hidden"
+									value={salaryRange[1]}
+								/>
+								{#each getFormFieldIssues(submitJobPosting.fields.salary.min) as issue, i (i)}
+									<Field.Error>{issue.message}</Field.Error>
+								{/each}
+								{#each getFormFieldIssues(submitJobPosting.fields.salary.max) as issue, i (i)}
+									<Field.Error>{issue.message}</Field.Error>
+								{/each}
+							</div>
 						</Field.Field>
+						<Field.Separator />
+						<Field.Field orientation="responsive" class="grid grid-cols-1 gap-4 @[480px]/field-group:grid-cols-[2fr_3fr]">
+							<Field.Content>
+								<Field.Label for="salary-currency">Currency</Field.Label>
+							</Field.Content>
+							<div class="flex flex-col gap-2">
+								<Select.Root type="single" bind:value={selectedCurrency}>
+									<Select.Trigger id="salary-currency">
+										{currencyLabel}
+									</Select.Trigger>
+									<Select.Content>
+										{#each currencies as currency (currency)}
+											<Select.Item value={currency}>{currency}</Select.Item>
+										{/each}
+									</Select.Content>
+								</Select.Root>
+								<input
+									{...submitJobPosting.fields.salary.currency.as('text')}
+									type="hidden"
+									value={selectedCurrency}
+								/>
+							</div>
+						</Field.Field>
+					</Field.Group>
+				</Field.Set>
+				<Field.Separator />
+				<Field.Set>
+					<Field.Legend>Company Information</Field.Legend>
+					<Field.Description>Details about your organization</Field.Description>
+					<Field.Separator />
+					<Field.Group class="@container/field-group">
+						<Field.Field
+							orientation="responsive"
+							data-invalid={getFormFieldIssues(submitJobPosting.fields.organization.name).length > 0}
+							class="grid grid-cols-1 gap-4 @[480px]/field-group:grid-cols-[2fr_3fr]"
+						>
+							<Field.Content>
+								<Field.Label for="company-name">Company Name *</Field.Label>
+							</Field.Content>
+							<div class="flex flex-col gap-2">
+								<Input
+									id="company-name"
+									placeholder="Your Company Inc."
+									{...submitJobPosting.fields.organization.name.as('text')}
+									aria-invalid={getFormFieldIssues(submitJobPosting.fields.organization.name).length >
+										0}
+								/>
+								{#each getFormFieldIssues(submitJobPosting.fields.organization.name) as issue, i (i)}
+									<Field.Error>{issue.message}</Field.Error>
+								{/each}
+							</div>
+						</Field.Field>
+						<Field.Separator />
+						<Field.Field
+							orientation="responsive"
+							data-invalid={getFormFieldIssues(submitJobPosting.fields.organization.url).length > 0}
+							class="grid grid-cols-1 gap-4 @[480px]/field-group:grid-cols-[2fr_3fr]"
+						>
+							<Field.Content>
+								<Field.Label for="company-url">Company Website *</Field.Label>
+							</Field.Content>
+							<div class="flex flex-col gap-2">
+								<Input
+									id="company-url"
+									placeholder="https://yourcompany.com"
+									{...submitJobPosting.fields.organization.url.as('text')}
+									type="url"
+									aria-invalid={getFormFieldIssues(submitJobPosting.fields.organization.url).length > 0}
+								/>
+								{#each getFormFieldIssues(submitJobPosting.fields.organization.url) as issue, i (i)}
+									<Field.Error>{issue.message}</Field.Error>
+								{/each}
+							</div>
+						</Field.Field>
+						<Field.Separator />
+						<Field.Field orientation="responsive" class="grid grid-cols-1 gap-4 @[480px]/field-group:grid-cols-[2fr_3fr]">
+							<Field.Content>
+								<Field.Label for="company-logo">Company Logo URL</Field.Label>
+								<Field.Description>Optional: URL to your company logo</Field.Description>
+							</Field.Content>
+							<div class="flex flex-col gap-2">
+								<Input
+									id="company-logo"
+									placeholder="https://yourcompany.com/logo.png"
+									{...submitJobPosting.fields.organization.logo.as('text')}
+									type="url"
+								/>
+							</div>
+						</Field.Field>
+						<Field.Separator />
+						<Field.Field
+							orientation="responsive"
+							data-invalid={getFormFieldIssues(submitJobPosting.fields.customerEmail).length > 0}
+							class="grid grid-cols-1 gap-4 @[480px]/field-group:grid-cols-[2fr_3fr]"
+						>
+							<Field.Content>
+								<Field.Label for="customer-email">Your Email *</Field.Label>
+								<Field.Description
+									>We'll send payment confirmation and job posting updates here</Field.Description
+								>
+							</Field.Content>
+							<div class="flex flex-col gap-2">
+								<Input
+									id="customer-email"
+									placeholder="you@company.com"
+									{...submitJobPosting.fields.customerEmail.as('text')}
+									type="email"
+									aria-invalid={getFormFieldIssues(submitJobPosting.fields.customerEmail).length > 0}
+								/>
+								{#each getFormFieldIssues(submitJobPosting.fields.customerEmail) as issue, i (i)}
+									<Field.Error>{issue.message}</Field.Error>
+								{/each}
+							</div>
+						</Field.Field>
+					</Field.Group>
+				</Field.Set>
+				<Field.Separator />
+				{#if ENABLED_UPSELLS.length > 0}
+					<Field.Set>
+						<Field.Legend>Upgrades</Field.Legend>
+						<Field.Description>Enhance your job posting visibility</Field.Description>
+						<Field.Separator />
+						<Field.Group class="@container/field-group gap-4">
+							{#each ENABLED_UPSELLS as upsell (upsell.id)}
+								<div
+									class="rounded-lg border p-4 transition-colors hover:border-primary/50 hover:bg-accent/50"
+								>
+									<Field.Field orientation="horizontal" class="items-start gap-3">
+										<Checkbox
+											id="upsell-{upsell.id}"
+											checked={selectedUpsells.has(upsell.id)}
+											onchange={(e) => {
+												const target = e.currentTarget as HTMLInputElement;
+											const checked = target.checked;
+												if (checked) {
+													selectedUpsells.add(upsell.id);
+												} else {
+													selectedUpsells.delete(upsell.id);
+												}
+												selectedUpsells = new Set(selectedUpsells);
+											}}
+											class="mt-1"
+										/>
+										<Field.Content class="space-y-1">
+											<Field.Label
+												for="upsell-{upsell.id}"
+												class="text-base leading-none font-semibold"
+											>
+												{upsell.name}
+												<Badge variant="secondary" class="ml-2">+${upsell.priceUSD}</Badge>
+												{#if upsell.badge}
+													<Badge variant="outline" class="ml-1">{upsell.badge}</Badge>
+												{/if}
+											</Field.Label>
+											<Field.Description class="text-sm">
+												{upsell.description}
+											</Field.Description>
+										</Field.Content>
+									</Field.Field>
+								</div>
+							{/each}
+						</Field.Group>
+						<!-- Hidden field to submit selected upsells as array -->
 						<input
-							{...submitJobPosting.fields.upgrades.featureInEmails.as('checkbox')}
+							{...submitJobPosting.fields.selectedUpsells.as('select multiple')}
 							type="hidden"
-							checked={featureInEmails}
+							value={Array.from(selectedUpsells)}
 						/>
-					</div>
-				</Field.Group>
-			</div>
-
-			<!-- Submit Section -->
-			<div class="flex flex-col gap-4 pt-4 sm:flex-row sm:justify-between">
-				<Button type="button" variant="outline" size="lg" class="order-2 sm:order-1">
-					Save as Draft
-				</Button>
-				<Button
-					type="submit"
-					size="lg"
-					class="order-1 bg-gradient-to-r from-primary to-primary/80 sm:order-2"
-				>
-					<CheckCircleIcon class="mr-2 size-5" />
-					Publish Job Posting
-				</Button>
-			</div>
+					</Field.Set>
+				{/if}
+				<Field.Separator />
+				<Field.Field orientation="horizontal">
+					<Button type="button" variant="outline" size="lg" onclick={handleSaveDraft}>Save as Draft</Button>
+					<Button type="submit" size="lg" class="bg-gradient-to-r from-primary to-primary/80">
+						<CheckCircleIcon class="mr-2 size-5" />
+						Publish Job Posting
+					</Button>
+				</Field.Field>
+			</Field.Group>
 		</form>
 	</Section.Content>
 
@@ -596,10 +1157,10 @@
 				<Item.Root variant="outline">
 					<Item.Header>
 						<Item.Title>Total</Item.Title>
-						<Item.Description class="text-pretty">$199 USD</Item.Description>
+						<Item.Description class="text-pretty">${totalPrice} {CURRENCY}</Item.Description>
 					</Item.Header>
 					<Item.Footer class="block text-xs">
-						Job post will be <span class="font-medium">pinned</span> for 30 days.
+						Job post will be <span class="font-medium">pinned</span> for {pricing.defaultDuration} days.
 					</Item.Footer>
 				</Item.Root>
 
@@ -640,10 +1201,7 @@
 					</Item.Footer>
 				</Item.Root>
 
-				<button
-					class="bg-primary-700 hover:bg-primary-800 active:bg-primary-800 disabled:bg-primary-200 focus:ring-primary-100 inline-flex h-max w-full items-center justify-center gap-x-2 rounded-lg border border-transparent px-4.5 py-2.5 text-base font-medium text-white shadow-[0rem_-0.0625rem_0rem_0.0625rem_rgba(107,_70,_193,_0.8)_inset,_0rem_0rem_0rem_0.0625rem_#6B46C1_inset,_0rem_0.03125rem_0rem_0.09375rem_hsla(0,_0%,_100%,_0.25)_inset] transition-colors hover:shadow-[0rem_-0.0625rem_0rem_0.0625rem_rgba(85,_60,_154,_0.8)_inset,_0rem_0rem_0rem_0.0625rem_#553C9A_inset,_0rem_0.03125rem_0rem_0.09375rem_hsla(0,_0%,_100%,_0.25)_inset] focus:ring-4 focus:outline-none active:translate-y-[0.5px] active:shadow-[0px_3px_0px_0px_#553C9A_inset] disabled:cursor-not-allowed disabled:shadow-xs disabled:hover:shadow-xs"
-					type="button">Post job for $199 USD</button
-				>
+				<Button type="button">Post job for ${totalPrice} {CURRENCY}</Button>
 				<div class="w-full border-t border-gray-100"></div>
 				<div class="flex flex-col gap-y-5">
 					<div>
