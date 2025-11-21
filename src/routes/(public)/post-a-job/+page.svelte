@@ -35,7 +35,7 @@
 
 	// Pricing configuration from server
 	const pricing = data.pricing;
-	const BASE_PRICE = pricing.basePriceUSD;
+	const BASE_PRICE = pricing.price;
 	const ENABLED_UPSELLS = pricing.upsells.filter((u) => u.enabled);
 
 	// Job type options (for preview data)
@@ -315,7 +315,7 @@
 		let total = BASE_PRICE;
 		ENABLED_UPSELLS.forEach((upsell) => {
 			if (selectedUpsells.has(upsell.id)) {
-				total += upsell.priceUSD;
+				total += upsell.price;
 			}
 		});
 		return total;
@@ -325,7 +325,7 @@
 <Intro.Root>
 	<Intro.Title>Post a Job</Intro.Title>
 	<Intro.Description>
-		Your job post will be pinned to the top and highlighted in relevant search results for {pricing.defaultDuration}
+		Your job post will be pinned to the top and highlighted in relevant search results for {pricing.duration}
 		days.
 	</Intro.Description>
 </Intro.Root>

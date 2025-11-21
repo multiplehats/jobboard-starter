@@ -21,6 +21,7 @@
 ## Architecture Overview
 
 ### Layer 1: Configuration (User Customizes)
+
 ```
 src/lib/config/products/
 ├── schema.server.ts           ← CORE (Zod validation schema)
@@ -59,11 +60,13 @@ src/lib/features/payments/
 ```
 
 **Data Flow**:
+
 - ✅ **Remote functions** for mutations (createOrder, processRefund)
 - ✅ **Page loads** for queries (order history, order details)
 - ✅ **API routes** ONLY for webhooks (external Stripe/provider callbacks)
 
 ### Layer 3: Database (Simple Schema)
+
 ```
 src/lib/server/db/schema/payments.ts
 - orders         (purchase intent + fulfillment data)
@@ -104,12 +107,14 @@ src/routes/
 ```
 
 **Key Pattern**:
+
 - ❌ NO `/api/checkout` route
 - ✅ Use `createOrderRemote()` remote function instead
 - ✅ Page loads for all queries
 - ✅ API routes ONLY for webhooks (external services)
 
 ### Layer 5: CLI Tools
+
 ```
 src/lib/cli/payments/
 ├── sync-products.ts           ← Sync config to Stripe
@@ -124,6 +129,7 @@ src/lib/cli/payments/
 **Before starting implementation**, read `tasks/unified-products-config-plan.md`.
 
 We use a **unified products configuration** that serves both:
+
 - ✅ Payment system (prices, provider mappings)
 - ✅ Display layer (upsells, badges, i18n)
 
@@ -140,6 +146,7 @@ The products config lives in `src/lib/config/products/` (renamed from `pricing/`
 The products configuration system is ALREADY built in `src/lib/config/pricing/`.
 
 **Migration Steps**:
+
 1. Rename `src/lib/config/pricing/` → `src/lib/config/products/`
 2. Update schema to add provider mappings
 3. Change from dollars to cents (e.g., `99` → `9900`)
@@ -1418,7 +1425,7 @@ async function handlePaymentRefunded(event: WebhookEvent, provider: string) {
 
 ```typescript
 import { db } from '$lib/server/db';
-import { jobPayments, jobs } from '$lib/server/db/schema';
+import { jobs } from '$lib/server/db/schema';
 import { generateId } from '$lib/server/utils/id';
 import { getPaymentSystem } from './system.server';
 import { eq } from 'drizzle-orm';
@@ -1530,25 +1537,29 @@ export const load: PageServerLoad = async ({ locals }) => {
 </script>
 
 <div class="container mx-auto p-6">
-	<h1 class="text-2xl font-bold mb-6">Your Orders</h1>
+	<h1 class="mb-6 text-2xl font-bold">Your Orders</h1>
 
 	<div class="space-y-4">
 		{#each data.orders as order}
-			<div class="bg-white shadow rounded-lg p-4">
-				<div class="flex justify-between items-start">
+			<div class="rounded-lg bg-white p-4 shadow">
+				<div class="flex items-start justify-between">
 					<div>
 						<p class="font-semibold">Order #{order.id.slice(0, 8)}</p>
 						<p class="text-sm text-gray-600">{new Date(order.createdAt).toLocaleDateString()}</p>
 					</div>
 					<div class="text-right">
 						<p class="font-bold">${(order.totalAmount / 100).toFixed(2)}</p>
-						<span class="px-2 py-1 text-xs rounded-full bg-{order.status === 'paid' ? 'green' : 'gray'}-100">
+						<span
+							class="rounded-full px-2 py-1 text-xs bg-{order.status === 'paid'
+								? 'green'
+								: 'gray'}-100"
+						>
 							{order.status}
 						</span>
 					</div>
 				</div>
 				<div class="mt-2">
-					<a href="/account/orders/{order.id}" class="text-blue-600 hover:underline text-sm">
+					<a href="/account/orders/{order.id}" class="text-sm text-blue-600 hover:underline">
 						View Details
 					</a>
 				</div>
@@ -1620,7 +1631,7 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 				items: [
 					{ productId: 'job_posting_base', quantity: 1, metadata: { jobId: data.jobId } },
 					// Add selected upsells
-					...selectedUpsells.map(id => ({ productId: id, quantity: 1 }))
+					...selectedUpsells.map((id) => ({ productId: id, quantity: 1 }))
 				],
 				successUrl: `${window.location.origin}/checkout/success`,
 				cancelUrl: `${window.location.origin}/post-a-job`
@@ -1650,6 +1661,7 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 ```
 
 **Benefits of Remote Functions**:
+
 - ✅ Full type safety from server to client
 - ✅ Built-in validation (Zod schemas)
 - ✅ No need for manual API routes
@@ -1713,9 +1725,9 @@ export const load: PageServerLoad = async () => {
 </script>
 
 <div class="container mx-auto p-6">
-	<h1 class="text-2xl font-bold mb-6">Orders</h1>
+	<h1 class="mb-6 text-2xl font-bold">Orders</h1>
 
-	<div class="bg-white shadow rounded-lg overflow-hidden">
+	<div class="overflow-hidden rounded-lg bg-white shadow">
 		<table class="min-w-full divide-y divide-gray-200">
 			<thead class="bg-gray-50">
 				<tr>
@@ -1726,24 +1738,28 @@ export const load: PageServerLoad = async () => {
 					<th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
 				</tr>
 			</thead>
-			<tbody class="bg-white divide-y divide-gray-200">
+			<tbody class="divide-y divide-gray-200 bg-white">
 				{#each data.orders as order}
 					<tr>
-						<td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+						<td class="px-6 py-4 text-sm font-medium whitespace-nowrap text-gray-900">
 							{order.id}
 						</td>
-						<td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+						<td class="px-6 py-4 text-sm whitespace-nowrap text-gray-500">
 							${(order.totalAmount / 100).toFixed(2)}
 						</td>
 						<td class="px-6 py-4 whitespace-nowrap">
-							<span class="px-2 py-1 text-xs rounded-full bg-{order.status === 'paid' ? 'green' : 'gray'}-100">
+							<span
+								class="rounded-full px-2 py-1 text-xs bg-{order.status === 'paid'
+									? 'green'
+									: 'gray'}-100"
+							>
 								{order.status}
 							</span>
 						</td>
-						<td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+						<td class="px-6 py-4 text-sm whitespace-nowrap text-gray-500">
 							{new Date(order.createdAt).toLocaleDateString()}
 						</td>
-						<td class="px-6 py-4 whitespace-nowrap text-sm">
+						<td class="px-6 py-4 text-sm whitespace-nowrap">
 							<a href="/admin/payments/orders/{order.id}" class="text-blue-600 hover:text-blue-900">
 								View
 							</a>
@@ -2080,7 +2096,7 @@ pnpm run payments:test-webhook
 
 **File**: `docs/payments-setup.md`
 
-```markdown
+````markdown
 # Payment Setup Guide
 
 ## Quick Start
@@ -2092,6 +2108,7 @@ pnpm run payments:test-webhook
    ```bash
    pnpm run payments:sync
    ```
+````
 
 3. **Add environment variables**
    Copy output from sync command to `.env`
@@ -2116,6 +2133,7 @@ paymentSystem.on('payment.succeeded', async (ctx) => {
   // Your custom logic here
 });
 ```
+
 ```
 
 ---
@@ -2183,37 +2201,43 @@ paymentSystem.on('payment.succeeded', async (ctx) => {
 
 ### Core Files (Upstream Maintains)
 ```
+
 src/lib/config/payments/
-├── schema.server.ts              ← CORE
-└── index.ts                      ← CORE
+├── schema.server.ts ← CORE
+└── index.ts ← CORE
 
 src/lib/features/payments/
-├── types.ts                      ← CORE
-├── system.server.ts              ← CORE
-├── checkout.server.ts            ← CORE
-├── webhooks.server.ts            ← CORE
-├── handlers.server.ts            ← CORE
+├── types.ts ← CORE
+├── system.server.ts ← CORE
+├── checkout.server.ts ← CORE
+├── webhooks.server.ts ← CORE
+├── handlers.server.ts ← CORE
 └── adapters/
-    ├── adapter.ts                ← CORE
-    └── stripe.server.ts          ← CORE
+├── adapter.ts ← CORE
+└── stripe.server.ts ← CORE
+
 ```
 
 ### User Customizes
 ```
-src/lib/config/payments/
-└── payments.config.ts            ← USER CUSTOMIZES
 
-src/lib/payments-setup.ts         ← USER CREATES (optional)
+src/lib/config/payments/
+└── payments.config.ts ← USER CUSTOMIZES
+
+src/lib/payments-setup.ts ← USER CREATES (optional)
+
 ```
 
 ### Routes (Minimal Changes Expected)
 ```
+
 src/routes/api/
 ├── checkout/+server.ts
 └── webhooks/[provider]/+server.ts
 
 src/routes/admin/payments/
 └── orders/+page.svelte
+
 ```
 
 ---
@@ -2253,22 +2277,24 @@ This payment system now fully follows `docs/backend-architecture.md` patterns:
 
 ### Feature-First Organization
 ```
+
 lib/features/payments/
-├── server/               # SvelteKit protected
-│   ├── repository.ts     # ✅ Data access layer
-│   ├── queries.ts        # ✅ Complex reads
-│   ├── mutations.ts      # ✅ Write logic
-│   ├── checkout.ts
-│   ├── webhooks.ts
-│   ├── handlers.ts
-│   ├── system.ts
-│   └── adapters/
-├── actions/              # ✅ Remote functions
-│   └── create-order.remote.ts
-├── components/           # UI components (if any)
-├── validators.ts         # ✅ SHARED (client + server)
-├── types.ts              # ✅ SHARED (client + server)
-└── index.ts              # Public exports
+├── server/ # SvelteKit protected
+│ ├── repository.ts # ✅ Data access layer
+│ ├── queries.ts # ✅ Complex reads
+│ ├── mutations.ts # ✅ Write logic
+│ ├── checkout.ts
+│ ├── webhooks.ts
+│ ├── handlers.ts
+│ ├── system.ts
+│ └── adapters/
+├── actions/ # ✅ Remote functions
+│ └── create-order.remote.ts
+├── components/ # UI components (if any)
+├── validators.ts # ✅ SHARED (client + server)
+├── types.ts # ✅ SHARED (client + server)
+└── index.ts # Public exports
+
 ```
 
 ### Data Flow Patterns
@@ -2307,3 +2333,4 @@ lib/features/payments/
 - ✅ `.remote.ts` suffix for remote functions (clear intent)
 
 **Result**: Fully consistent with existing codebase patterns! 🎉
+```

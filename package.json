@@ -20,6 +20,8 @@
 		"db:migrate": "pnpm run db migrate",
 		"db:push": "pnpm run db push",
 		"db:studio": "pnpm run db studio",
+		"payments:sync": "tsx scripts/payments/sync-products.ts",
+		"payments:sync:polar": "tsx scripts/payments/sync-polar-products.ts",
 		"clear-cache": "rm -rf node_modules/.vite && rm -rf .svelte-kit"
 	},
 	"devDependencies": {
@@ -77,6 +79,7 @@
 		"@neondatabase/serverless": "^1.0.2",
 		"@openrouter/ai-sdk-provider": "^1.2.5",
 		"@paralleldrive/cuid2": "^3.0.4",
+		"@polar-sh/sdk": "^0.41.5",
 		"@tanstack/svelte-form": "^1.23.8",
 		"@tanstack/zod-form-adapter": "^0.42.1",
 		"@tiptap/core": "^3.10.4",
@@ -107,6 +110,7 @@
 		"katex": "^0.16.25",
 		"lowlight": "^3.3.0",
 		"runed": "^0.36.0",
+		"stripe": "^20.0.0",
 		"svelte-tiptap": "^3.0.1",
 		"tiptap-extension-auto-joiner": "^0.1.3"
 	}

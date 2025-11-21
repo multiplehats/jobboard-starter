@@ -4,6 +4,10 @@ import { sequence } from '@sveltejs/kit/hooks';
 import { svelteKitHandler } from 'better-auth/svelte-kit';
 import { building } from '$app/environment';
 import { auth } from '$lib/server/auth';
+import { initPaymentSystem } from '$lib/features/payments/server/init';
+
+// Initialize payment system once during app startup
+initPaymentSystem();
 
 const betterAuthHandler: Handle = async ({ event, resolve }) => {
 	event.locals.getSession = auth.api.getSession;

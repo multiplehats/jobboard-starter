@@ -5,6 +5,6 @@ export * from './schema/recruiter-profiles';
 export * from './schema/jobs';
 export * from './schema/saved-jobs';
 export * from './schema/job-applications';
-export * from './schema/job-payments';
+export * from './schema/payments';
 export * from './schema/admin-actions';
 export * from './schema/utils';

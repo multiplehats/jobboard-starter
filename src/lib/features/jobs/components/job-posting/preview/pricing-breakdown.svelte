@@ -11,6 +11,6 @@
 		<Item.Description class="text-pretty">${totalPrice} {currency}</Item.Description>
 	</Item.Header>
 	<Item.Footer class="block text-xs">
-		Job post will be <span class="font-medium">pinned</span> for {pricing.defaultDuration} days.
+		Job post will be <span class="font-medium">pinned</span> for {pricing.duration} days.
 	</Item.Footer>
 </Item.Root>

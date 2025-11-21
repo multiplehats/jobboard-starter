@@ -25,9 +25,32 @@
 	}: Props = $props();
 
 	const timezones = getTimezoneOptions();
+	const MAX_RESULTS = 50; // Limit displayed results for performance
 
 	let open = $state(false);
+	let searchQuery = $state('');
 	let triggerRef = $state<HTMLButtonElement>(null!);
+
+	// Filter timezones based on search query
+	const filteredTimezones = $derived.by(() => {
+		if (!searchQuery.trim()) {
+			// Show first MAX_RESULTS when no search query
+			return timezones.slice(0, MAX_RESULTS);
+		}
+
+		const query = searchQuery.toLowerCase();
+		const results: typeof timezones = [];
+
+		// First pass: exact matches and selected items
+		for (const tz of timezones) {
+			if (value.includes(tz.value) || tz.searchText.includes(query)) {
+				results.push(tz);
+				if (results.length >= MAX_RESULTS) break;
+			}
+		}
+
+		return results;
+	});
 
 	// Derived label for the button
 	const selectedLabel = $derived.by(() => {
@@ -62,6 +85,13 @@
 	function isSelected(timezoneValue: string): boolean {
 		return value.includes(timezoneValue);
 	}
+
+	// Reset search query when popover closes
+	$effect(() => {
+		if (!open) {
+			searchQuery = '';
+		}
+	});
 </script>
 
 <Popover.Root bind:open>
@@ -81,14 +111,14 @@
 		{/snippet}
 	</Popover.Trigger>
 	<Popover.Content class="w-[400px] p-0" align="start">
-		<Command.Root>
-			<Command.Input placeholder="Search timezones..." autofocus />
+		<Command.Root shouldFilter={false}>
+			<Command.Input placeholder="Search timezones..." autofocus bind:value={searchQuery} />
 			<Command.List>
 				<Command.Empty>No timezone found.</Command.Empty>
 				<Command.Group>
-					{#each timezones as timezone (timezone.value)}
+					{#each filteredTimezones as timezone (timezone.value)}
 						<Command.Item
-							value={timezone.searchText}
+							value={timezone.value}
 							onSelect={() => {
 								toggleTimezone(timezone.value);
 							}}
@@ -101,6 +131,11 @@
 						</Command.Item>
 					{/each}
 				</Command.Group>
+				{#if filteredTimezones.length === MAX_RESULTS && searchQuery.trim()}
+					<div class="text-muted-foreground px-2 py-1.5 text-center text-xs">
+						Showing first {MAX_RESULTS} results. Keep typing to refine...
+					</div>
+				{/if}
 			</Command.List>
 		</Command.Root>
 	</Popover.Content>

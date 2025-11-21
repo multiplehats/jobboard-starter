@@ -1,0 +1,1 @@
+ALTER TABLE "jobs" ADD COLUMN "paid_amount" integer;

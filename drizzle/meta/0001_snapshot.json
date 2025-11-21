@@ -1,6 +1,6 @@
 {
-  "id": "b4d3fc0a-1022-4c00-be63-4bc43602fc91",
-  "prevId": "4b0b760b-dac9-436b-a0b5-f77163f24d97",
+  "id": "e550ba30-c47b-46f7-93ea-bc8a14c69233",
+  "prevId": "26fadcc5-3917-4aff-b811-af4d543d0265",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -704,7 +704,8 @@
         },
         "desired_salary_currency": {
           "name": "desired_salary_currency",
-          "type": "varchar(10)",
+          "type": "desired_salary_currency",
+          "typeSchema": "public",
           "primaryKey": false,
           "notNull": false,
           "default": "'USD'"
@@ -760,7 +761,8 @@
         },
         "profile_visibility": {
           "name": "profile_visibility",
-          "type": "varchar(20)",
+          "type": "profile_visibility",
+          "typeSchema": "public",
           "primaryKey": false,
           "notNull": true,
           "default": "'public'"
@@ -1049,16 +1051,18 @@
         },
         "salary_currency": {
           "name": "salary_currency",
-          "type": "varchar(10)",
+          "type": "currency",
+          "typeSchema": "public",
           "primaryKey": false,
-          "notNull": false,
+          "notNull": true,
           "default": "'USD'"
         },
         "salary_period": {
           "name": "salary_period",
-          "type": "varchar(20)",
+          "type": "salary_period",
+          "typeSchema": "public",
           "primaryKey": false,
-          "notNull": false,
+          "notNull": true,
           "default": "'year'"
         },
         "application_url": {
@@ -1099,25 +1103,24 @@
           "primaryKey": false,
           "notNull": false
         },
+        "paid_amount": {
+          "name": "paid_amount",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
         "paid_at": {
           "name": "paid_at",
           "type": "timestamp",
           "primaryKey": false,
           "notNull": false
         },
-        "has_newsletter_feature": {
-          "name": "has_newsletter_feature",
-          "type": "boolean",
+        "selected_upsells": {
+          "name": "selected_upsells",
+          "type": "json",
           "primaryKey": false,
           "notNull": true,
-          "default": false
-        },
-        "has_extended_duration": {
-          "name": "has_extended_duration",
-          "type": "boolean",
-          "primaryKey": false,
-          "notNull": true,
-          "default": false
+          "default": "'[]'::json"
         },
         "published_at": {
           "name": "published_at",
@@ -1455,7 +1458,8 @@
         },
         "status": {
           "name": "status",
-          "type": "varchar(50)",
+          "type": "application_status",
+          "typeSchema": "public",
           "primaryKey": false,
           "notNull": true
         },
@@ -1600,8 +1604,8 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
-    "public.job_payments": {
-      "name": "job_payments",
+    "public.orders": {
+      "name": "orders",
       "schema": "",
       "columns": {
         "id": {
@@ -1610,60 +1614,195 @@
           "primaryKey": true,
           "notNull": true
         },
-        "job_id": {
-          "name": "job_id",
+        "user_id": {
+          "name": "user_id",
           "type": "text",
           "primaryKey": false,
           "notNull": true
         },
-        "provider": {
-          "name": "provider",
-          "type": "varchar(50)",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'dodopayments'"
-        },
-        "provider_payment_id": {
-          "name": "provider_payment_id",
-          "type": "varchar(255)",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "base_price": {
-          "name": "base_price",
-          "type": "integer",
+        "items": {
+          "name": "items",
+          "type": "json",
           "primaryKey": false,
           "notNull": true
         },
-        "upgrades_price": {
-          "name": "upgrades_price",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 0
-        },
-        "total_price": {
-          "name": "total_price",
+        "total_amount": {
+          "name": "total_amount",
           "type": "integer",
           "primaryKey": false,
           "notNull": true
         },
         "currency": {
           "name": "currency",
-          "type": "varchar(10)",
+          "type": "text",
           "primaryKey": false,
           "notNull": true,
-          "default": "'EUR'"
+          "default": "'USD'"
         },
-        "upgrades": {
-          "name": "upgrades",
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'pending'"
+        },
+        "provider": {
+          "name": "provider",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "provider_session_id": {
+          "name": "provider_session_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "metadata": {
+          "name": "metadata",
           "type": "json",
           "primaryKey": false,
           "notNull": false
         },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "completed_at": {
+          "name": "completed_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "orders_user_idx": {
+          "name": "orders_user_idx",
+          "columns": [
+            {
+              "expression": "user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "orders_status_idx": {
+          "name": "orders_status_idx",
+          "columns": [
+            {
+              "expression": "status",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "orders_provider_session_idx": {
+          "name": "orders_provider_session_idx",
+          "columns": [
+            {
+              "expression": "provider_session_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "orders_user_id_user_id_fk": {
+          "name": "orders_user_id_user_id_fk",
+          "tableFrom": "orders",
+          "tableTo": "user",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.payments": {
+      "name": "payments",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "order_id": {
+          "name": "order_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "provider": {
+          "name": "provider",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "provider_payment_id": {
+          "name": "provider_payment_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "provider_customer_id": {
+          "name": "provider_customer_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "amount": {
+          "name": "amount",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "currency": {
+          "name": "currency",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'USD'"
+        },
         "status": {
           "name": "status",
-          "type": "varchar(50)",
+          "type": "text",
           "primaryKey": false,
           "notNull": true,
           "default": "'pending'"
@@ -1681,6 +1820,13 @@
           "notNull": true,
           "default": "now()"
         },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
         "completed_at": {
           "name": "completed_at",
           "type": "timestamp",
@@ -1689,11 +1835,11 @@
         }
       },
       "indexes": {
-        "job_payments_job_idx": {
-          "name": "job_payments_job_idx",
+        "payments_order_idx": {
+          "name": "payments_order_idx",
           "columns": [
             {
-              "expression": "job_id",
+              "expression": "order_id",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -1704,8 +1850,8 @@
           "method": "btree",
           "with": {}
         },
-        "job_payments_provider_payment_idx": {
-          "name": "job_payments_provider_payment_idx",
+        "payments_provider_payment_idx": {
+          "name": "payments_provider_payment_idx",
           "columns": [
             {
               "expression": "provider_payment_id",
@@ -1718,15 +1864,30 @@
           "concurrently": false,
           "method": "btree",
           "with": {}
+        },
+        "payments_status_idx": {
+          "name": "payments_status_idx",
+          "columns": [
+            {
+              "expression": "status",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         }
       },
       "foreignKeys": {
-        "job_payments_job_id_jobs_id_fk": {
-          "name": "job_payments_job_id_jobs_id_fk",
-          "tableFrom": "job_payments",
-          "tableTo": "jobs",
+        "payments_order_id_orders_id_fk": {
+          "name": "payments_order_id_orders_id_fk",
+          "tableFrom": "payments",
+          "tableTo": "orders",
           "columnsFrom": [
-            "job_id"
+            "order_id"
           ],
           "columnsTo": [
             "id"
@@ -1736,7 +1897,15 @@
         }
       },
       "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
+      "uniqueConstraints": {
+        "payments_provider_payment_id_unique": {
+          "name": "payments_provider_payment_id_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "provider_payment_id"
+          ]
+        }
+      },
       "policies": {},
       "checkConstraints": {},
       "isRLSEnabled": false
@@ -1850,6 +2019,36 @@
     }
   },
   "enums": {
+    "public.desired_salary_currency": {
+      "name": "desired_salary_currency",
+      "schema": "public",
+      "values": [
+        "USD",
+        "EUR",
+        "GBP",
+        "CAD",
+        "AUD"
+      ]
+    },
+    "public.profile_visibility": {
+      "name": "profile_visibility",
+      "schema": "public",
+      "values": [
+        "public",
+        "private"
+      ]
+    },
+    "public.currency": {
+      "name": "currency",
+      "schema": "public",
+      "values": [
+        "USD",
+        "EUR",
+        "GBP",
+        "CAD",
+        "AUD"
+      ]
+    },
     "public.hiring_location_type": {
       "name": "hiring_location_type",
       "schema": "public",
@@ -1889,6 +2088,15 @@
         "onsite"
       ]
     },
+    "public.salary_period": {
+      "name": "salary_period",
+      "schema": "public",
+      "values": [
+        "year",
+        "month",
+        "hour"
+      ]
+    },
     "public.seniority_level": {
       "name": "seniority_level",
       "schema": "public",
@@ -1907,6 +2115,15 @@
       "values": [
         "no-specific",
         "required"
+      ]
+    },
+    "public.application_status": {
+      "name": "application_status",
+      "schema": "public",
+      "values": [
+        "modal_shown",
+        "cta_clicked",
+        "external_opened"
       ]
     }
   },

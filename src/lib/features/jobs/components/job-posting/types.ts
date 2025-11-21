@@ -11,7 +11,7 @@ import type { PublicJobPostingInput } from '../../validators';
 import type { JobType, SeniorityLevel } from '../../constants';
 import type { CalendarDate } from '@internationalized/date';
 import type { Editor, Content } from '@tiptap/core';
-import type { PricingConfig } from '$lib/config/pricing';
+import type { ProductsConfig } from '$lib/config/products';
 
 /**
  * Type alias for the form fields from the public job posting schema
@@ -75,8 +75,8 @@ export interface UpsellsSectionProps {
 	// Properly typed fields
 	fields: PublicJobPostingFields;
 
-	// Enabled upsells from pricing config
-	enabledUpsells: PricingConfig['jobPosting']['upsells'];
+	// Enabled upsells from products config
+	enabledUpsells: ProductsConfig['upsells'];
 
 	// UI state (bindable)
 	selectedUpsells: Set<string>;
@@ -107,7 +107,7 @@ export interface JobPreviewCardProps {
  * Props for the OrderSummary component
  */
 export interface OrderSummaryProps {
-	pricing: PricingConfig['jobPosting'];
+	pricing: ProductsConfig['jobPosting'];
 	previewData: JobPreviewData;
 	totalPrice: number;
 	selectedUpsells: Set<string>;
@@ -117,7 +117,7 @@ export interface OrderSummaryProps {
  * Props for the PricingBreakdown component
  */
 export interface PricingBreakdownProps {
-	pricing: PricingConfig['jobPosting'];
+	pricing: ProductsConfig['jobPosting'];
 	selectedUpsells: Set<string>;
 	totalPrice: number;
 	currency: string;

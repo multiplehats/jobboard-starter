@@ -79,6 +79,7 @@ export const jobs = pgTable(
 
 		// Payment
 		paymentId: varchar('payment_id', { length: 255 }),
+		paidAmount: integer('paid_amount'), // Amount paid in cents
 		paidAt: timestamp('paid_at'),
 
 		// Upgrades (flexible - stores array of purchased upsell IDs from pricing config)

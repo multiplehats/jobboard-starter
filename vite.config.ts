@@ -28,5 +28,8 @@ export default defineConfig({
 				}
 			}
 		]
+	},
+	server: {
+		allowedHosts: ['sk.chrisjayden.com']
 	}
 });

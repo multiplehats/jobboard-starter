@@ -8,6 +8,7 @@ declare global {
 			user?: UserObj;
 			session?: SessionObj['session'];
 			getSession: AuthConfig['api']['getSession'];
+			auth: () => Promise<SessionObj | null>;
 		}
 		interface PageData {
 			config: {

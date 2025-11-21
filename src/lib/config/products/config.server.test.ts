@@ -1,36 +1,47 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import {
+	getProductsConfig,
 	getPricingConfig,
 	enrichUpsellsWithTranslations,
 	UpsellHelpers,
-	DEFAULT_PRICING_CONFIG
+	DEFAULT_PRODUCTS_CONFIG
 } from './config.server';
 import { isPredefinedUpsellId } from './constants.server';
-import type { PricingConfig } from './schema.server';
+import type { ProductsConfig } from './schema.server';
 
-describe('Pricing Configuration', () => {
-	describe('getPricingConfig()', () => {
-		it('should return default pricing config', () => {
+describe('Products Configuration', () => {
+	describe('getProductsConfig()', () => {
+		it('should return default products config', () => {
+			const config = getProductsConfig();
+
+			expect(config).toBeDefined();
+			expect(config.jobPosting).toBeDefined();
+			expect(config.jobPosting.price).toBeGreaterThanOrEqual(0);
+			expect(config.jobPosting.currency).toBe('USD');
+			expect(config.jobPosting.duration).toBeGreaterThan(0);
+		});
+
+		it('should return config with upsells array', () => {
+			const config = getProductsConfig();
+
+			expect(Array.isArray(config.upsells)).toBe(true);
+		});
+
+		it('should have valid base price in cents', () => {
+			const config = getProductsConfig();
+
+			expect(config.jobPosting.price).toBe(9900); // $99.00 in cents
+			expect(typeof config.jobPosting.price).toBe('number');
+		});
+	});
+
+	describe('getPricingConfig() [backward compatibility]', () => {
+		it('should work as alias for getProductsConfig', () => {
 			const config = getPricingConfig();
 
 			expect(config).toBeDefined();
 			expect(config.jobPosting).toBeDefined();
-			expect(config.jobPosting.basePriceUSD).toBeGreaterThan(0);
-			expect(config.jobPosting.currency).toBe('USD');
-			expect(config.jobPosting.defaultDuration).toBeGreaterThan(0);
-		});
-
-		it('should return config with upsells array', () => {
-			const config = getPricingConfig();
-
-			expect(Array.isArray(config.jobPosting.upsells)).toBe(true);
-		});
-
-		it('should have valid base price', () => {
-			const config = getPricingConfig();
-
-			expect(config.jobPosting.basePriceUSD).toBe(99);
-			expect(typeof config.jobPosting.basePriceUSD).toBe('number');
+			expect(config.jobPosting.price).toBe(9900);
 		});
 	});
 
@@ -44,10 +55,10 @@ describe('Pricing Configuration', () => {
 		};
 
 		it('should enrich predefined upsells with i18n translations', () => {
-			const upsells: PricingConfig['jobPosting']['upsells'] = [
+			const upsells: ProductsConfig['upsells'] = [
 				{
 					id: 'email_newsletter',
-					priceUSD: 50,
+					price: 5000,
 					enabled: true
 				}
 			];
@@ -56,17 +67,17 @@ describe('Pricing Configuration', () => {
 
 			expect(enriched[0].name).toBe('Feature in Email Newsletter');
 			expect(enriched[0].description).toBe('Include your job posting in our weekly newsletter');
-			expect(enriched[0].priceUSD).toBe(50);
+			expect(enriched[0].price).toBe(5000);
 			expect(enriched[0].enabled).toBe(true);
 		});
 
 		it('should preserve custom upsell name and description', () => {
-			const upsells: PricingConfig['jobPosting']['upsells'] = [
+			const upsells: ProductsConfig['upsells'] = [
 				{
 					id: 'my_custom_feature',
 					name: 'My Custom Feature',
 					description: 'Custom description',
-					priceUSD: 99,
+					price: 9900,
 					enabled: true
 				}
 			];
@@ -78,10 +89,10 @@ describe('Pricing Configuration', () => {
 		});
 
 		it('should throw error for custom upsell without name', () => {
-			const upsells: PricingConfig['jobPosting']['upsells'] = [
+			const upsells: ProductsConfig['upsells'] = [
 				{
 					id: 'my_custom_feature',
-					priceUSD: 99,
+					price: 9900,
 					enabled: true
 				}
 			];
@@ -92,10 +103,10 @@ describe('Pricing Configuration', () => {
 		});
 
 		it('should preserve badge field', () => {
-			const upsells: PricingConfig['jobPosting']['upsells'] = [
+			const upsells: ProductsConfig['upsells'] = [
 				{
 					id: 'email_newsletter',
-					priceUSD: 50,
+					price: 5000,
 					enabled: true,
 					badge: 'Popular'
 				}
@@ -107,17 +118,17 @@ describe('Pricing Configuration', () => {
 		});
 
 		it('should handle multiple upsells with mixed predefined and custom', () => {
-			const upsells: PricingConfig['jobPosting']['upsells'] = [
+			const upsells: ProductsConfig['upsells'] = [
 				{
 					id: 'email_newsletter',
-					priceUSD: 50,
+					price: 5000,
 					enabled: true
 				},
 				{
 					id: 'my_custom',
 					name: 'Custom',
 					description: 'Custom desc',
-					priceUSD: 25,
+					price: 2500,
 					enabled: true
 				}
 			];
@@ -183,7 +194,7 @@ describe('Pricing Configuration', () => {
 
 				if (upsell) {
 					expect(upsell.id).toBe('email_newsletter');
-					expect(upsell.priceUSD).toBeDefined();
+					expect(upsell.price).toBeDefined();
 					expect(typeof upsell.enabled).toBe('boolean');
 				}
 			});
@@ -234,22 +245,22 @@ describe('Pricing Configuration', () => {
 		});
 	});
 
-	describe('DEFAULT_PRICING_CONFIG', () => {
+	describe('DEFAULT_PRODUCTS_CONFIG', () => {
 		it('should have valid structure', () => {
-			expect(DEFAULT_PRICING_CONFIG.jobPosting).toBeDefined();
-			expect(DEFAULT_PRICING_CONFIG.jobPosting.basePriceUSD).toBeGreaterThan(0);
-			expect(DEFAULT_PRICING_CONFIG.jobPosting.currency).toBe('USD');
-			expect(DEFAULT_PRICING_CONFIG.jobPosting.defaultDuration).toBeGreaterThan(0);
+			expect(DEFAULT_PRODUCTS_CONFIG.jobPosting).toBeDefined();
+			expect(DEFAULT_PRODUCTS_CONFIG.jobPosting.price).toBeGreaterThanOrEqual(0);
+			expect(DEFAULT_PRODUCTS_CONFIG.jobPosting.currency).toBe('USD');
+			expect(DEFAULT_PRODUCTS_CONFIG.jobPosting.duration).toBeGreaterThan(0);
 		});
 
 		it('should have valid upsells array', () => {
-			const upsells = DEFAULT_PRICING_CONFIG.jobPosting.upsells;
+			const upsells = DEFAULT_PRODUCTS_CONFIG.upsells;
 
 			expect(Array.isArray(upsells)).toBe(true);
 
 			upsells.forEach((upsell) => {
 				expect(upsell.id).toBeDefined();
-				expect(typeof upsell.priceUSD).toBe('number');
+				expect(typeof upsell.price).toBe('number');
 				expect(typeof upsell.enabled).toBe('boolean');
 
 				// Custom upsells must have name and description
@@ -261,11 +272,19 @@ describe('Pricing Configuration', () => {
 		});
 
 		it('should have unique upsell IDs', () => {
-			const upsells = DEFAULT_PRICING_CONFIG.jobPosting.upsells;
+			const upsells = DEFAULT_PRODUCTS_CONFIG.upsells;
 			const ids = upsells.map((u) => u.id);
 			const uniqueIds = new Set(ids);
 
 			expect(ids.length).toBe(uniqueIds.size);
+		});
+
+		it('should have prices in cents', () => {
+			expect(DEFAULT_PRODUCTS_CONFIG.jobPosting.price).toBe(9900); // $99.00
+			DEFAULT_PRODUCTS_CONFIG.upsells.forEach((upsell) => {
+				expect(upsell.price).toBeGreaterThan(0);
+				expect(Number.isInteger(upsell.price)).toBe(true);
+			});
 		});
 	});
 });
