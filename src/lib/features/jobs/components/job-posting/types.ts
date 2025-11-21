@@ -6,8 +6,7 @@
  * RemoteFormFields type system for type-safe form handling.
  */
 
-import type { RemoteFormFields } from '@sveltejs/kit';
-import type { PublicJobPostingInput } from '../../validators';
+import type { submitJobPosting } from '../../actions/post-job.remote';
 import type { JobType, SeniorityLevel } from '../../constants';
 import type { CalendarDate } from '@internationalized/date';
 import type { Editor, Content } from '@tiptap/core';
@@ -15,8 +14,9 @@ import type { ProductsConfig } from '$lib/config/products';
 
 /**
  * Type alias for the form fields from the public job posting schema
+ * Derived from the actual submitJobPosting form action
  */
-export type PublicJobPostingFields = RemoteFormFields<PublicJobPostingInput>;
+export type PublicJobPostingFields = typeof submitJobPosting.fields;
 
 /**
  * Props for the JobInformationSection component

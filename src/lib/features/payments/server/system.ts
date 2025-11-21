@@ -40,7 +40,7 @@ export class PaymentSystem {
 		}
 
 		// Register Polar if configured
-		if (env.POLAR_ACCESS_TOKEN) {
+		if (env.POLAR_API_KEY) {
 			this.registerAdapter(new PolarAdapter());
 		}
 

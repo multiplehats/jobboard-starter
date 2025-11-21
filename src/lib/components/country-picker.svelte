@@ -148,15 +148,12 @@
 								alt={country.name}
 								class="mr-2 size-5 rounded-full object-cover"
 							/>
-							<div class="flex flex-col">
-								<span class="text-sm">{country.name}</span>
-								<span class="text-muted-foreground text-xs">{country.code}</span>
-							</div>
+							<span class="text-sm">{country.name}</span>
 						</Command.Item>
 					{/each}
 				</Command.Group>
 				{#if filteredCountries.length === MAX_RESULTS && searchQuery.trim()}
-					<div class="text-muted-foreground px-2 py-1.5 text-center text-xs">
+					<div class="px-2 py-1.5 text-center text-xs text-muted-foreground">
 						Showing first {MAX_RESULTS} results. Keep typing to refine...
 					</div>
 				{/if}

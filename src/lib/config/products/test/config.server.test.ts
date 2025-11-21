@@ -1,13 +1,12 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import {
 	getProductsConfig,
-	getPricingConfig,
 	enrichUpsellsWithTranslations,
 	UpsellHelpers,
 	DEFAULT_PRODUCTS_CONFIG
-} from './config.server';
-import { isPredefinedUpsellId } from './constants.server';
-import type { ProductsConfig } from './schema.server';
+} from '$lib/config/products/config.server.js';
+import { isPredefinedUpsellId } from '$lib/config/products/constants.server.js';
+import type { ProductsConfig } from '$lib/config/products/schema.server.js';
 
 describe('Products Configuration', () => {
 	describe('getProductsConfig()', () => {
@@ -32,16 +31,6 @@ describe('Products Configuration', () => {
 
 			expect(config.jobPosting.price).toBe(9900); // $99.00 in cents
 			expect(typeof config.jobPosting.price).toBe('number');
-		});
-	});
-
-	describe('getPricingConfig() [backward compatibility]', () => {
-		it('should work as alias for getProductsConfig', () => {
-			const config = getPricingConfig();
-
-			expect(config).toBeDefined();
-			expect(config.jobPosting).toBeDefined();
-			expect(config.jobPosting.price).toBe(9900);
 		});
 	});
 

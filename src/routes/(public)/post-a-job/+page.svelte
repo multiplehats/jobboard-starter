@@ -355,13 +355,22 @@
 				<JobInformationSection fields={submitJobPosting.fields as PublicJobPostingFields} />
 				<Field.Separator />
 
-				<LocationSection fields={submitJobPosting.fields as PublicJobPostingFields} />
+				<LocationSection
+					fields={submitJobPosting.fields as PublicJobPostingFields}
+					config={data.jobBoardConfig}
+				/>
 				<Field.Separator />
 
-				<WorkingPermitsSection fields={submitJobPosting.fields as PublicJobPostingFields} />
+				<WorkingPermitsSection
+					fields={submitJobPosting.fields as PublicJobPostingFields}
+					config={data.jobBoardConfig}
+				/>
 				<Field.Separator />
 
-				<SalarySection fields={submitJobPosting.fields as PublicJobPostingFields} />
+				<SalarySection
+					fields={submitJobPosting.fields as PublicJobPostingFields}
+					config={data.jobBoardConfig}
+				/>
 				<Field.Separator />
 
 				<CompanyInformationSection fields={submitJobPosting.fields as PublicJobPostingFields} />

@@ -6,7 +6,7 @@
  * Unlike subscriptions, we create one-time payment products.
  *
  * Usage:
- * 1. Set POLAR_ACCESS_TOKEN in your .env file
+ * 1. Set POLAR_API_KEY in your .env file
  * 2. Run: pnpm run payments:sync:polar
  * 3. Copy the output environment variables to your .env file
  *
@@ -15,26 +15,33 @@
  */
 
 import { Polar } from '@polar-sh/sdk';
-import { getProductsConfig } from '$lib/config/products';
-import { env } from '$env/dynamic/private';
+import { getProductsConfig } from '../../src/lib/config/products';
+import dotenv from 'dotenv';
+
+// Load environment variables from .env file
+dotenv.config();
+
+console.log('🔄 Starting Polar product sync...', {
+	hasKey: process.env.POLAR_API_KEY ? '✅' : '❌'
+});
 
 // Check for required environment variables
-if (!env.POLAR_ACCESS_TOKEN) {
-	console.error('❌ POLAR_ACCESS_TOKEN environment variable is required');
+if (!process.env.POLAR_API_KEY) {
+	console.error('❌ POLAR_API_KEY environment variable is required');
 	console.error('Please set your Polar access token in your .env file');
 	process.exit(1);
 }
 
 const polar = new Polar({
-	accessToken: env.POLAR_ACCESS_TOKEN,
-	server: (env.POLAR_SERVER as 'sandbox' | 'production') || 'sandbox'
+	accessToken: process.env.POLAR_API_KEY,
+	server: 'sandbox'
 });
 
 async function syncProducts() {
 	const config = getProductsConfig();
 
 	console.log('🚀 Syncing products to Polar...');
-	console.log(`   Server: ${env.POLAR_SERVER || 'sandbox'}`);
+	console.log(`   Server: ${process.env.POLAR_SERVER || 'sandbox'}`);
 	console.log('');
 
 	try {
@@ -96,9 +103,7 @@ async function syncProducts() {
 			});
 
 			const upsellPriceId =
-				upsellProduct.prices && upsellProduct.prices.length > 0
-					? upsellProduct.prices[0].id
-					: '';
+				upsellProduct.prices && upsellProduct.prices.length > 0 ? upsellProduct.prices[0].id : '';
 
 			const envVarName = `POLAR_PRODUCT_UPSELL_${upsell.id.toUpperCase()}`;
 			const priceEnvVarName = `POLAR_PRICE_UPSELL_${upsell.id.toUpperCase()}`;

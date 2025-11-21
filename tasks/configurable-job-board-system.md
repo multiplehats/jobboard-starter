@@ -1,7 +1,8 @@
 # Configurable Job Board System - Implementation Plan
 
-**Status**: Planning
+**Status**: Ready for Implementation
 **Created**: 2025-11-21
+**Updated**: 2025-11-21
 **Priority**: High
 
 ## Problem Statement
@@ -28,22 +29,30 @@ The current job posting system is hardcoded for remote jobs. Users who fork this
    - Change job board type in ONE config file
    - Preset-based for common use cases
    - Override specific settings as needed
+   - **MUST prevent invalid configurations**
 
-3. **Testable**:
+3. **Type Safe**:
+   - Full TypeScript type safety
+   - No runtime-only type errors
+   - Proper static analysis support
+
+4. **Testable**:
    - Each preset can be tested independently
    - Validators adapt to configuration
    - Form behavior is predictable
+   - Config validation prevents bugs
 
-4. **Flexible**:
+5. **Flexible**:
    - Support remote-only, local-only, hybrid boards
    - Allow custom field requirements
    - Extensible for future needs
 
 ### Out of Scope
 
-- ✗ Backwards compatibility (making breaking changes is OK)
+- ✗ Backwards compatibility (making breaking changes is OK - will document migration)
 - ✗ Geographic/map-based location pickers (keep it simple with text input)
 - ✗ Complex location validation (can add later)
+- ✗ Runtime config changes (requires server restart - documented)
 
 ## Current State Analysis
 
@@ -57,6 +66,7 @@ locationType: locationTypeEnum('location_type').notNull(),
 
 **Status**: ✅ Schema already supports location field
 **Issue**: ❌ No conditional requirement based on locationType
+**Issue**: ❌ No max length validation in Zod matching DB (255 chars)
 
 ### Validators
 
@@ -69,6 +79,7 @@ locationType: z.enum(LOCATION_TYPES).default('remote')
 - ❌ Hardcoded default to 'remote'
 - ❌ No location field in public job posting schema
 - ❌ No conditional validation based on locationType
+- ❌ No max length validation
 
 ### Form Components
 
@@ -81,7 +92,9 @@ locationType: z.enum(LOCATION_TYPES).default('remote')
 
 ## Solution Architecture
 
-### Approach: Preset-Based Configuration with Conditional Location
+### Approach: Preset-Based Configuration with Static Types
+
+**Key Design Decision**: Separate static types from runtime validation to maintain type safety.
 
 **Three-Layer System**:
 
@@ -89,43 +102,58 @@ locationType: z.enum(LOCATION_TYPES).default('remote')
 ┌─────────────────────────────────────────┐
 │  1. Preset Selection (site.server.ts)  │
 │     preset: 'local-only' | 'remote-...' │
+│     + Config Validation                 │
 └─────────────────────────────────────────┘
                     ↓
 ┌─────────────────────────────────────────┐
-│  2. Dynamic Validation (validators.ts)  │
-│     - Conditional location requirement  │
-│     - Config-driven field visibility    │
+│  2. Static Base Schema + Runtime Valid  │
+│     - Base type (all fields optional)   │
+│     - Runtime validation with config    │
+│     - Conditional requirements          │
 └─────────────────────────────────────────┘
                     ↓
 ┌─────────────────────────────────────────┐
 │  3. Reactive Form (location-section)    │
-│     - Show location input for onsite/   │
-│       hybrid                            │
-│     - Show timezones for remote         │
-│     - Validate based on selection       │
+│     - Config-driven field visibility    │
+│     - Show/hide based on config + state │
+│     - Real-time validation              │
 └─────────────────────────────────────────┘
 ```
 
 ### Key Design Decisions
 
-1. **Location Field**:
-   - Simple text input (e.g., "San Francisco, CA, USA" or "123 Main St, NYC")
-   - Required for onsite/hybrid, optional/hidden for remote
-   - Can enhance with autocomplete later
+1. **Field Configuration**:
+   - Single `mode` field: `hidden`, `optional`, `required`, `conditional`
+   - Prevents invalid combinations (e.g., visible=false + required=true)
+   - Clear semantics for developers
 
-2. **Validation Logic**:
-   - Dynamic schema builder: `buildJobPostingSchema(config)`
-   - Conditional field requirements based on locationType
+2. **Type Safety**:
+   - Base schema with all fields optional
+   - Runtime validation enforces config rules
+   - No `z.infer<ReturnType<...>>` pattern that breaks types
+   - Proper TypeScript inference maintained
+
+3. **Validation Logic**:
+   - Static base schema: `baseJobPostingSchema`
+   - Dynamic validator: `validateJobPosting(data, config)`
+   - Conditional field requirements
    - Config-driven defaults
+   - **Schema only includes visible fields**
 
-3. **Form Behavior**:
-   - Reactive: Show/hide fields based on locationType selection
+4. **Form Behavior**:
+   - Reactive: Show/hide fields based on config + locationType
    - Validate in real-time
-   - Clear location when switching from onsite/hybrid to remote
+   - Clear location when switching to remote
+   - Contextual error messages
+
+5. **Config Validation**:
+   - Validate merged configs prevent conflicts
+   - Check logical consistency
+   - Fail fast on invalid configs
 
 ## Implementation Plan
 
-### Phase 1: Configuration System (2-3 hours)
+### Phase 1: Configuration System (3-4 hours)
 
 #### Step 1.1: Create Job Board Config Schema
 
@@ -142,38 +170,52 @@ export const PRESET_TYPES = [
   'custom'         // Full control
 ] as const;
 
+export const FIELD_MODES = ['hidden', 'optional', 'required', 'conditional'] as const;
+
+/**
+ * Field mode:
+ * - hidden: Field not shown, not validated, not in schema
+ * - optional: Field shown but not required
+ * - required: Field shown and always required
+ * - conditional: Field shown, required based on locationType
+ *                (for location: required when onsite/hybrid)
+ */
+export const fieldConfigSchema = z.object({
+  mode: z.enum(FIELD_MODES)
+});
+
 export const jobBoardConfigSchema = z.object({
   preset: z.enum(PRESET_TYPES),
 
   // Which location types to allow
-  allowedLocationTypes: z.array(z.enum(['remote', 'hybrid', 'onsite'])),
+  allowedLocationTypes: z.array(z.enum(['remote', 'hybrid', 'onsite'])).min(1),
 
   // Default location type for new jobs
   defaultLocationType: z.enum(['remote', 'hybrid', 'onsite']).optional(),
 
-  // Field visibility
+  // Field configuration using mode
   fields: z.object({
-    location: z.object({
-      visible: z.boolean(),
-      required: z.enum(['always', 'never', 'conditional']) // conditional = required for onsite/hybrid
-    }),
-    hiringLocation: z.object({
-      visible: z.boolean(),
-      required: z.boolean()
-    }),
-    workingPermits: z.object({
-      visible: z.boolean(),
-      required: z.boolean()
-    }),
-    salary: z.object({
-      visible: z.boolean(),
-      required: z.boolean()
-    })
+    location: fieldConfigSchema,
+    hiringLocation: fieldConfigSchema,
+    workingPermits: fieldConfigSchema,
+    salary: fieldConfigSchema
   })
-});
+}).refine(
+  (config) => {
+    // defaultLocationType must be in allowedLocationTypes
+    if (config.defaultLocationType && !config.allowedLocationTypes.includes(config.defaultLocationType)) {
+      return false;
+    }
+    return true;
+  },
+  {
+    message: 'defaultLocationType must be one of the allowedLocationTypes'
+  }
+);
 
 export type JobBoardConfig = z.infer<typeof jobBoardConfigSchema>;
 export type PresetType = (typeof PRESET_TYPES)[number];
+export type FieldMode = (typeof FIELD_MODES)[number];
 ```
 
 #### Step 1.2: Define Presets
@@ -182,6 +224,7 @@ export type PresetType = (typeof PRESET_TYPES)[number];
 
 ```typescript
 import type { JobBoardConfig } from './schema.server';
+import { jobBoardConfigSchema } from './schema.server';
 
 /**
  * Remote-First: Tech/startup job boards
@@ -195,20 +238,16 @@ export const REMOTE_FIRST_PRESET: JobBoardConfig = {
   defaultLocationType: 'remote',
   fields: {
     location: {
-      visible: true,
-      required: 'conditional' // Required when onsite/hybrid selected
+      mode: 'conditional' // Required when onsite/hybrid selected
     },
     hiringLocation: {
-      visible: true,
-      required: false
+      mode: 'optional'
     },
     workingPermits: {
-      visible: true,
-      required: false
+      mode: 'optional'
     },
     salary: {
-      visible: true,
-      required: false
+      mode: 'optional'
     }
   }
 };
@@ -225,20 +264,16 @@ export const LOCAL_ONLY_PRESET: JobBoardConfig = {
   defaultLocationType: 'onsite',
   fields: {
     location: {
-      visible: true,
-      required: 'always'
+      mode: 'required' // Always required
     },
     hiringLocation: {
-      visible: false, // Not relevant for local-only
-      required: false
+      mode: 'hidden' // Not relevant for local-only
     },
     workingPermits: {
-      visible: false, // Usually not relevant
-      required: false
+      mode: 'hidden' // Usually not relevant
     },
     salary: {
-      visible: true,
-      required: false
+      mode: 'optional'
     }
   }
 };
@@ -255,20 +290,16 @@ export const HYBRID_FIRST_PRESET: JobBoardConfig = {
   defaultLocationType: 'hybrid',
   fields: {
     location: {
-      visible: true,
-      required: 'conditional'
+      mode: 'conditional'
     },
     hiringLocation: {
-      visible: true,
-      required: false
+      mode: 'optional'
     },
     workingPermits: {
-      visible: true,
-      required: false
+      mode: 'optional'
     },
     salary: {
-      visible: true,
-      required: false
+      mode: 'optional'
     }
   }
 };
@@ -284,73 +315,146 @@ export const FLEXIBLE_PRESET: JobBoardConfig = {
   allowedLocationTypes: ['remote', 'hybrid', 'onsite'],
   fields: {
     location: {
-      visible: true,
-      required: 'conditional'
+      mode: 'conditional'
     },
     hiringLocation: {
-      visible: true,
-      required: false
+      mode: 'optional'
     },
     workingPermits: {
-      visible: true,
-      required: false
+      mode: 'optional'
     },
     salary: {
-      visible: true,
-      required: false
+      mode: 'optional'
     }
   }
 };
 
-export const PRESETS = {
+const PRESETS_MAP = {
   'remote-first': REMOTE_FIRST_PRESET,
   'local-only': LOCAL_ONLY_PRESET,
   'hybrid-first': HYBRID_FIRST_PRESET,
-  'flexible': FLEXIBLE_PRESET,
-  'custom': {} as JobBoardConfig
+  'flexible': FLEXIBLE_PRESET
 } as const;
 
-export function getPreset(name: keyof typeof PRESETS): JobBoardConfig {
-  return PRESETS[name];
+/**
+ * Get a preset by name
+ * Returns null for 'custom' preset (requires explicit config)
+ */
+export function getPreset(name: PresetType): JobBoardConfig | null {
+  if (name === 'custom') {
+    return null;
+  }
+  return PRESETS_MAP[name];
 }
 
+/**
+ * Validate config for logical consistency
+ * Throws if config has invalid combinations
+ */
+function validateConfigLogic(config: JobBoardConfig): void {
+  // Validate defaultLocationType is in allowedLocationTypes
+  if (config.defaultLocationType && !config.allowedLocationTypes.includes(config.defaultLocationType)) {
+    throw new Error(
+      `defaultLocationType "${config.defaultLocationType}" must be in allowedLocationTypes: ${config.allowedLocationTypes.join(', ')}`
+    );
+  }
+
+  // For local-only boards, location should not be hidden
+  if (config.allowedLocationTypes.length === 1 && config.allowedLocationTypes[0] === 'onsite') {
+    if (config.fields.location.mode === 'hidden') {
+      throw new Error('location field cannot be hidden for local-only job boards');
+    }
+  }
+
+  // If only remote is allowed, location should probably be hidden or optional
+  if (config.allowedLocationTypes.length === 1 && config.allowedLocationTypes[0] === 'remote') {
+    if (config.fields.location.mode === 'required' || config.fields.location.mode === 'conditional') {
+      throw new Error('location field should not be required for remote-only job boards');
+    }
+  }
+}
+
+/**
+ * Merge user config with preset and validate
+ */
 export function resolveConfig(userConfig: Partial<JobBoardConfig>): JobBoardConfig {
   const preset = userConfig.preset || 'remote-first';
 
   if (preset === 'custom') {
-    return userConfig as JobBoardConfig;
+    // Custom preset requires explicit configuration
+    if (!userConfig.allowedLocationTypes || !userConfig.fields) {
+      throw new Error(
+        'Custom preset requires explicit configuration. Please specify allowedLocationTypes and fields.'
+      );
+    }
+
+    // Validate and return
+    const config = jobBoardConfigSchema.parse(userConfig);
+    validateConfigLogic(config);
+    return config;
   }
 
   const basePreset = getPreset(preset);
+  if (!basePreset) {
+    throw new Error(`Unknown preset: ${preset}`);
+  }
 
-  // Merge user overrides
-  return {
-    ...basePreset,
-    ...userConfig,
+  // Deep merge user overrides with preset
+  const merged: JobBoardConfig = {
+    preset: basePreset.preset,
+    allowedLocationTypes: userConfig.allowedLocationTypes ?? basePreset.allowedLocationTypes,
+    defaultLocationType: userConfig.defaultLocationType ?? basePreset.defaultLocationType,
     fields: {
-      ...basePreset.fields,
-      ...userConfig.fields
+      location: userConfig.fields?.location ?? basePreset.fields.location,
+      hiringLocation: userConfig.fields?.hiringLocation ?? basePreset.fields.hiringLocation,
+      workingPermits: userConfig.fields?.workingPermits ?? basePreset.fields.workingPermits,
+      salary: userConfig.fields?.salary ?? basePreset.fields.salary
     }
   };
+
+  // Validate merged config
+  const validated = jobBoardConfigSchema.parse(merged);
+  validateConfigLogic(validated);
+
+  return validated;
 }
 ```
 
-#### Step 1.3: Config Getter
+#### Step 1.3: Config Getter with Cache Management
 
 **File**: `src/lib/config/jobs/config.server.ts` (NEW)
 
 ```typescript
+import { dev } from '$app/environment';
 import { siteConfig } from '$lib/config/site.server';
 import { resolveConfig } from './presets.server';
 import type { JobBoardConfig } from './schema.server';
 
 let cachedConfig: JobBoardConfig | null = null;
 
-export function getJobBoardConfig(): JobBoardConfig {
-  if (!cachedConfig) {
+/**
+ * Get the resolved job board configuration
+ *
+ * IMPORTANT: Config changes require server restart in production.
+ * In development mode, config is refreshed on each call for better DX.
+ *
+ * @param forceRefresh - Force refresh of cached config (useful for testing)
+ * @returns Validated job board configuration
+ */
+export function getJobBoardConfig(forceRefresh = false): JobBoardConfig {
+  // In dev mode, always refresh for better DX
+  // In production, cache unless forceRefresh is true
+  if (!cachedConfig || forceRefresh || dev) {
     cachedConfig = resolveConfig(siteConfig.jobBoard);
   }
   return cachedConfig;
+}
+
+/**
+ * Clear the cached config (useful for testing)
+ */
+export function clearConfigCache(): void {
+  cachedConfig = null;
 }
 ```
 
@@ -390,22 +494,49 @@ export const siteConfig = {
   /**
    * Job Board Configuration
    *
-   * Presets:
+   * ⚠️ IMPORTANT: Configuration changes require server restart
+   *
+   * Choose a preset that matches your job board type:
+   *
    * - 'remote-first': Tech/startup boards (default)
+   *   → All location types, defaults to remote, location required for onsite/hybrid
+   *
    * - 'local-only': Restaurant, retail, healthcare
+   *   → Only onsite jobs, location always required, no remote fields
+   *
    * - 'hybrid-first': Post-COVID mixed boards
-   * - 'flexible': All options, no defaults
-   * - 'custom': Full customization
+   *   → All location types, defaults to hybrid, location required for onsite/hybrid
+   *
+   * - 'flexible': General purpose
+   *   → All location types, no defaults, location conditional
+   *
+   * - 'custom': Full customization (advanced)
+   *   → Requires explicit allowedLocationTypes and fields configuration
    *
    * Examples:
    *
-   * // Use preset
+   * // Use preset as-is
    * jobBoard: { preset: 'local-only' }
    *
-   * // Override preset
+   * // Override preset settings
    * jobBoard: {
    *   preset: 'remote-first',
-   *   fields: { salary: { visible: true, required: true } }
+   *   fields: {
+   *     salary: { mode: 'required' }
+   *   }
+   * }
+   *
+   * // Full custom configuration
+   * jobBoard: {
+   *   preset: 'custom',
+   *   allowedLocationTypes: ['remote', 'onsite'],
+   *   defaultLocationType: 'remote',
+   *   fields: {
+   *     location: { mode: 'conditional' },
+   *     hiringLocation: { mode: 'optional' },
+   *     workingPermits: { mode: 'hidden' },
+   *     salary: { mode: 'required' }
+   *   }
    * }
    */
   jobBoard: {
@@ -424,9 +555,9 @@ export type SiteConfig = typeof siteConfig;
 export type ClientSiteConfig = Pick<SiteConfig, 'flags'>;
 ```
 
-### Phase 2: Dynamic Validators (2-3 hours)
+### Phase 2: Type-Safe Validators (3-4 hours)
 
-#### Step 2.1: Update Job Validators
+#### Step 2.1: Create Base Schema and Validator
 
 **File**: `src/lib/features/jobs/validators.ts` (UPDATE)
 
@@ -443,54 +574,43 @@ import {
 import type { JobBoardConfig } from '$lib/config/jobs';
 
 /**
- * Build dynamic job posting schema based on config
+ * Base job posting schema with all fields optional
+ * This maintains type safety while allowing runtime validation
  */
-export function buildPublicJobPostingSchema(config: JobBoardConfig) {
-  // Location type - only allow configured types
-  const locationTypeSchema = z
-    .enum(config.allowedLocationTypes as [string, ...string[]])
-    .default(config.defaultLocationType || config.allowedLocationTypes[0]);
-
-  // Physical location - conditional requirement
-  let locationSchema: z.ZodString | z.ZodOptional<z.ZodString>;
-
-  if (config.fields.location.required === 'always') {
-    locationSchema = z.string().min(1, 'Location is required');
-  } else if (config.fields.location.required === 'never') {
-    locationSchema = z.string().optional();
-  } else {
-    // Conditional: required for onsite/hybrid
-    locationSchema = z.string().optional();
-  }
-
-  // Hiring location schema
-  const hiringLocationSchema = config.fields.hiringLocation.visible
-    ? z.object({
-        type: config.fields.hiringLocation.required
-          ? z.enum(HIRING_LOCATION_TYPES, { required_error: 'Hiring location type is required' })
-          : z.enum(HIRING_LOCATION_TYPES).optional(),
-        timezones: z.array(z.string()).default([])
-      })
-    : z.object({
-        type: z.enum(HIRING_LOCATION_TYPES).optional(),
-        timezones: z.array(z.string()).default([])
-      });
-
-  // Working permits schema
-  const workingPermitsSchema = config.fields.workingPermits.visible
-    ? z.object({
-        type: config.fields.workingPermits.required
-          ? z.enum(WORKING_PERMITS_TYPES, { required_error: 'Working permits type is required' })
-          : z.enum(WORKING_PERMITS_TYPES).optional(),
-        permits: z.array(z.string()).default([])
-      })
-    : z.object({
-        type: z.enum(WORKING_PERMITS_TYPES).optional(),
-        permits: z.array(z.string()).default([])
-      });
-
-  // Salary schema
-  const salarySchema = z
+export const baseJobPostingSchema = z.object({
+  job: z.object({
+    title: z.string().min(1, 'Title is required').max(80, 'Title must be under 80 characters'),
+    description: z.string().min(1, 'Description is required'),
+    type: z.enum(JOB_TYPES, { required_error: 'Job type is required' }),
+    seniority: z
+      .array(z.enum(SENIORITY_LEVELS))
+      .min(1, 'At least one seniority level is required'),
+    appLinkOrEmail: z
+      .string()
+      .min(1, 'Application method is required')
+      .refine(
+        (val) => {
+          const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+          const urlRegex = /^https?:\/\/.+/;
+          return emailRegex.test(val) || urlRegex.test(val);
+        },
+        { message: 'Must be a valid email or URL' }
+      ),
+    applicationDeadline: z
+      .string()
+      .refine((val) => !isNaN(Date.parse(val)), { message: 'Must be a valid date' })
+  }),
+  locationType: z.enum(LOCATION_TYPES),
+  location: z.string().max(255, 'Location must be under 255 characters').optional(),
+  hiringLocation: z.object({
+    type: z.enum(HIRING_LOCATION_TYPES).optional(),
+    timezones: z.array(z.string()).default([])
+  }).optional(),
+  workingPermits: z.object({
+    type: z.enum(WORKING_PERMITS_TYPES).optional(),
+    permits: z.array(z.string()).default([])
+  }).optional(),
+  salary: z
     .object({
       min: z.number().int().positive().optional(),
       max: z.number().int().positive().optional(),
@@ -504,66 +624,168 @@ export function buildPublicJobPostingSchema(config: JobBoardConfig) {
         return true;
       },
       { message: 'Maximum salary must be greater than or equal to minimum salary' }
-    );
+    )
+    .optional(),
+  organization: z.object({
+    name: z.string().min(1, 'Company name is required'),
+    url: z.string().url('Must be a valid URL'),
+    logo: z.string().optional()
+  }),
+  customerEmail: z.string().email('Must be a valid email'),
+  selectedUpsells: z.array(z.string()).default([])
+});
 
-  const baseSchema = z.object({
-    job: z.object({
-      title: z.string().min(1, 'Title is required').max(80, 'Title must be under 80 characters'),
-      description: z.string().min(1, 'Description is required'),
-      type: z.enum(JOB_TYPES, { required_error: 'Job type is required' }),
-      seniority: z
-        .array(z.enum(SENIORITY_LEVELS))
-        .min(1, 'At least one seniority level is required'),
-      appLinkOrEmail: z
-        .string()
-        .min(1, 'Application method is required')
-        .refine(
-          (val) => {
-            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-            const urlRegex = /^https?:\/\/.+/;
-            return emailRegex.test(val) || urlRegex.test(val);
-          },
-          { message: 'Must be a valid email or URL' }
-        ),
-      applicationDeadline: z
-        .string()
-        .refine((val) => !isNaN(Date.parse(val)), { message: 'Must be a valid date' })
-    }),
-    locationType: locationTypeSchema,
-    location: locationSchema,
-    hiringLocation: hiringLocationSchema,
-    workingPermits: workingPermitsSchema,
-    salary: salarySchema,
-    organization: z.object({
-      name: z.string().min(1, 'Company name is required'),
-      url: z.string().url('Must be a valid URL'),
-      logo: z.string().optional()
-    }),
-    customerEmail: z.string().email('Must be a valid email'),
-    selectedUpsells: z.array(z.string()).default([])
-  });
+export type JobPostingInput = z.infer<typeof baseJobPostingSchema>;
 
-  // Add conditional validation for location field
-  if (config.fields.location.required === 'conditional') {
-    return baseSchema.refine(
+/**
+ * Build dynamic schema that only includes visible fields
+ * This ensures hidden fields don't appear in validation errors
+ */
+export function buildPublicJobPostingSchema(config: JobBoardConfig) {
+  // Build schema fields based on config
+  const schemaFields: any = {
+    job: baseJobPostingSchema.shape.job,
+    organization: baseJobPostingSchema.shape.organization,
+    customerEmail: baseJobPostingSchema.shape.customerEmail,
+    selectedUpsells: baseJobPostingSchema.shape.selectedUpsells,
+  };
+
+  // Location type - only allow configured types with default
+  const allowedTypes = config.allowedLocationTypes as [string, ...string[]];
+  const defaultType = config.defaultLocationType || config.allowedLocationTypes[0];
+  schemaFields.locationType = z.enum(allowedTypes).default(defaultType);
+
+  // Physical location - only include if not hidden
+  if (config.fields.location.mode !== 'hidden') {
+    const locationMode = config.fields.location.mode;
+
+    if (locationMode === 'required') {
+      schemaFields.location = z
+        .string()
+        .min(1, 'Office location is required')
+        .max(255, 'Location must be under 255 characters');
+    } else {
+      // optional or conditional - will validate conditionally below
+      schemaFields.location = z
+        .string()
+        .max(255, 'Location must be under 255 characters')
+        .optional();
+    }
+  }
+
+  // Hiring location - only include if not hidden
+  if (config.fields.hiringLocation.mode !== 'hidden') {
+    const mode = config.fields.hiringLocation.mode;
+
+    schemaFields.hiringLocation = z.object({
+      type: mode === 'required'
+        ? z.enum(HIRING_LOCATION_TYPES, { required_error: 'Hiring location type is required' })
+        : z.enum(HIRING_LOCATION_TYPES).optional(),
+      timezones: z.array(z.string()).default([])
+    });
+  }
+
+  // Working permits - only include if not hidden
+  if (config.fields.workingPermits.mode !== 'hidden') {
+    const mode = config.fields.workingPermits.mode;
+
+    schemaFields.workingPermits = z.object({
+      type: mode === 'required'
+        ? z.enum(WORKING_PERMITS_TYPES, { required_error: 'Working permits type is required' })
+        : z.enum(WORKING_PERMITS_TYPES).optional(),
+      permits: z.array(z.string()).default([])
+    });
+  }
+
+  // Salary - only include if not hidden
+  if (config.fields.salary.mode !== 'hidden') {
+    const mode = config.fields.salary.mode;
+
+    const salaryBase = z
+      .object({
+        min: z.number().int().positive().optional(),
+        max: z.number().int().positive().optional(),
+        currency: z.enum(CURRENCIES).default('USD')
+      })
+      .refine(
+        (data) => {
+          if (data.min !== undefined && data.max !== undefined) {
+            return data.max >= data.min;
+          }
+          return true;
+        },
+        { message: 'Maximum salary must be greater than or equal to minimum salary' }
+      );
+
+    if (mode === 'required') {
+      schemaFields.salary = salaryBase.refine(
+        (data) => data.min !== undefined || data.max !== undefined,
+        { message: 'Salary information is required' }
+      );
+    } else {
+      schemaFields.salary = salaryBase;
+    }
+  }
+
+  // Build base schema
+  let schema = z.object(schemaFields);
+
+  // Add conditional validations
+
+  // 1. Location is required for onsite/hybrid when mode is 'conditional'
+  if (config.fields.location.mode === 'conditional') {
+    schema = schema.refine(
       (data) => {
-        // If onsite or hybrid, location is required
         if (data.locationType === 'onsite' || data.locationType === 'hybrid') {
           return data.location && data.location.length > 0;
         }
         return true;
       },
       {
-        message: 'Location is required for onsite and hybrid positions',
+        message: (data: any) => {
+          if (data.locationType === 'onsite') {
+            return 'Office location is required for onsite positions';
+          }
+          return 'Office location is required for hybrid positions';
+        },
         path: ['location']
       }
     );
   }
 
-  return baseSchema;
+  // 2. Timezones are required when hiringLocation type is 'timezone'
+  if (config.fields.hiringLocation.mode !== 'hidden') {
+    schema = schema.refine(
+      (data) => {
+        if (data.hiringLocation?.type === 'timezone') {
+          return data.hiringLocation.timezones && data.hiringLocation.timezones.length > 0;
+        }
+        return true;
+      },
+      {
+        message: 'At least one timezone is required when hiring by timezone',
+        path: ['hiringLocation', 'timezones']
+      }
+    );
+  }
+
+  return schema;
 }
 
-export type PublicJobPostingInput = z.infer<ReturnType<typeof buildPublicJobPostingSchema>>;
+/**
+ * Validate job posting data against config
+ * This is the main validation function used in forms
+ */
+export function validateJobPosting(data: unknown, config: JobBoardConfig) {
+  const schema = buildPublicJobPostingSchema(config);
+  return schema.parse(data);
+}
+
+/**
+ * Type for the validated job posting
+ * This is what you get after successful validation
+ */
+export type ValidatedJobPosting = z.infer<typeof baseJobPostingSchema>;
 ```
 
 #### Step 2.2: Update Post Job Action
@@ -578,6 +800,7 @@ import { z } from 'zod';
 
 /**
  * Get the dynamic schema based on job board config
+ * This runs at request time, using the cached config
  */
 const getSchema = () => buildPublicJobPostingSchema(getJobBoardConfig());
 
@@ -588,6 +811,7 @@ export const prefillFromATS = command(z.string(), async (atsUrl: string) => {
 export const submitJobPosting = form(getSchema(), async (data) => {
   console.log('Job posting data:', data);
 
+  // Simulate processing
   await new Promise((resolve) => setTimeout(resolve, 1000));
 
   return {
@@ -597,14 +821,14 @@ export const submitJobPosting = form(getSchema(), async (data) => {
   };
 });
 
-type SubmitJobOutput = {
+export type SubmitJobOutput = {
   success: boolean;
   jobId: string;
   message: string;
 };
 ```
 
-### Phase 3: Update Form Components (3-4 hours)
+### Phase 3: Update Form Components (4-5 hours)
 
 #### Step 3.1: Pass Config to Page
 
@@ -667,29 +891,35 @@ export const load: PageServerLoad = async () => {
   const selectedTimezones = $derived(fields.hiringLocation?.timezones.value() || []);
   const location = $derived(fields.location?.value() || '');
 
-  // Show physical location input when:
-  // - Field is configured as visible
-  // - AND (always required OR conditional and onsite/hybrid selected)
+  // Determine field visibility and requirements based on config
+
+  // Show physical location input when not hidden AND
+  // (required always OR conditional with onsite/hybrid selected)
   const showLocationInput = $derived(
-    config.fields.location.visible &&
-      (config.fields.location.required === 'always' ||
-        (config.fields.location.required === 'conditional' &&
+    config.fields.location.mode !== 'hidden' &&
+      (config.fields.location.mode === 'required' ||
+       config.fields.location.mode === 'optional' ||
+        (config.fields.location.mode === 'conditional' &&
           (selectedLocationType === 'onsite' || selectedLocationType === 'hybrid')))
   );
 
-  // Show hiring location (timezone) when:
-  // - Field is configured as visible
-  // - AND remote or hybrid selected
+  // Show hiring location (timezone) when not hidden AND remote or hybrid selected
   const showHiringLocation = $derived(
-    config.fields.hiringLocation.visible &&
+    config.fields.hiringLocation.mode !== 'hidden' &&
       (selectedLocationType === 'remote' || selectedLocationType === 'hybrid')
   );
 
-  // Location is required for onsite/hybrid when conditional
+  // Location is required when mode is 'required' OR
+  // mode is 'conditional' AND onsite/hybrid selected
   const isLocationRequired = $derived(
-    config.fields.location.required === 'always' ||
-      (config.fields.location.required === 'conditional' &&
+    config.fields.location.mode === 'required' ||
+      (config.fields.location.mode === 'conditional' &&
         (selectedLocationType === 'onsite' || selectedLocationType === 'hybrid'))
+  );
+
+  // Hiring location is required when mode is 'required'
+  const isHiringLocationRequired = $derived(
+    config.fields.hiringLocation.mode === 'required'
   );
 </script>
 
@@ -707,12 +937,20 @@ export const load: PageServerLoad = async () => {
       >
         <Field.Content>
           <Field.Label for="location-type">Location Type *</Field.Label>
+          <Field.Description>How will this role be performed?</Field.Description>
         </Field.Content>
         <div class="flex flex-col gap-2">
           <RadioGroup.Root
             value={selectedLocationType}
             onValueChange={(v) => {
-              if (v) fields.locationType.set(v as any);
+              if (v) {
+                fields.locationType.set(v as any);
+
+                // Clear location when switching to remote
+                if (v === 'remote' && fields.location) {
+                  fields.location.set('');
+                }
+              }
             }}
           >
             {#each allowedLocationTypes as locType (locType.value)}
@@ -742,9 +980,11 @@ export const load: PageServerLoad = async () => {
           </Field.Label>
           <Field.Description>
             {#if selectedLocationType === 'onsite'}
-              Where will the employee work? (e.g., "San Francisco, CA, USA" or "123 Main St, New York")
+              Where will the employee work? (e.g., "San Francisco, CA, USA")
             {:else if selectedLocationType === 'hybrid'}
               Where is the office for in-person work? (e.g., "San Francisco, CA, USA")
+            {:else}
+              Optional physical office location (e.g., "San Francisco, CA, USA")
             {/if}
           </Field.Description>
         </Field.Content>
@@ -771,14 +1011,23 @@ export const load: PageServerLoad = async () => {
         class="grid grid-cols-1 gap-4 @[480px]/field-group:grid-cols-[2fr_3fr]"
       >
         <Field.Content>
-          <Field.Label>Hiring Location {config.fields.hiringLocation.required ? '*' : ''}</Field.Label>
+          <Field.Label>
+            Hiring Location {isHiringLocationRequired ? '*' : ''}
+          </Field.Label>
           <Field.Description>Who can apply based on location?</Field.Description>
         </Field.Content>
         <div class="flex flex-col gap-2">
           <RadioGroup.Root
             value={selectedHiringLocationType}
             onValueChange={(v) => {
-              if (v) fields.hiringLocation?.type.set(v as any);
+              if (v) {
+                fields.hiringLocation?.type.set(v as any);
+
+                // Clear timezones when switching to worldwide
+                if (v === 'worldwide' && fields.hiringLocation) {
+                  fields.hiringLocation.timezones.set([]);
+                }
+              }
             }}
           >
             <Field.Field orientation="horizontal">
@@ -849,8 +1098,9 @@ export const load: PageServerLoad = async () => {
 
   const selectedWorkingPermitsType = $derived(fields.workingPermits?.type.value());
 
-  // Only show section if configured as visible
-  const showSection = config.fields.workingPermits.visible;
+  // Only show section if not hidden
+  const showSection = config.fields.workingPermits.mode !== 'hidden';
+  const isRequired = config.fields.workingPermits.mode === 'required';
 </script>
 
 {#if showSection}
@@ -865,14 +1115,22 @@ export const load: PageServerLoad = async () => {
       >
         <Field.Content>
           <Field.Label>
-            Working Permits Type {config.fields.workingPermits.required ? '*' : ''}
+            Working Permits Type {isRequired ? '*' : ''}
           </Field.Label>
+          <Field.Description>Are there any work authorization requirements?</Field.Description>
         </Field.Content>
         <div class="flex flex-col gap-2">
           <RadioGroup.Root
             value={selectedWorkingPermitsType}
             onValueChange={(v) => {
-              if (v) fields.workingPermits?.type.set(v as any);
+              if (v) {
+                fields.workingPermits?.type.set(v as any);
+
+                // Clear permits when switching to no-specific
+                if (v === 'no-specific' && fields.workingPermits) {
+                  fields.workingPermits.permits.set([]);
+                }
+              }
             }}
           >
             <Field.Field orientation="horizontal">
@@ -904,7 +1162,7 @@ export const load: PageServerLoad = async () => {
           <div class="flex flex-col gap-2">
             <Input
               id="required-permits"
-              placeholder="e.g., US Work Authorization, EU Work Permit (comma separated)"
+              placeholder="e.g., US Work Authorization, EU Work Permit"
               {...fields.workingPermits?.permits.as('select multiple')}
             />
           </div>
@@ -915,20 +1173,122 @@ export const load: PageServerLoad = async () => {
 {/if}
 ```
 
-#### Step 3.4: Update Main Form
+#### Step 3.4: Create Salary Section
 
-**File**: `src/routes/(public)/post-a-job/+page.svelte` (UPDATE)
-
-Pass config to all form sections:
+**File**: `src/lib/features/jobs/components/job-posting/form-sections/salary-section.svelte` (NEW)
 
 ```svelte
 <script lang="ts">
-  // ... existing imports and code ...
+  import * as Field from '$lib/components/ui/field/index.js';
+  import { Input } from '$lib/components/ui/input/index.js';
+  import * as Select from '$lib/components/ui/select/index.js';
+  import { getFormFieldIssues } from '$lib/utils/generators';
+  import type { PublicJobPostingFields } from '../types';
+  import type { JobBoardConfig } from '$lib/config/jobs';
+
+  let {
+    fields,
+    config
+  }: {
+    fields: PublicJobPostingFields;
+    config: JobBoardConfig;
+  } = $props();
+
+  const salaryMin = $derived(fields.salary?.min.value());
+  const salaryMax = $derived(fields.salary?.max.value());
+  const currency = $derived(fields.salary?.currency.value() || 'USD');
+
+  // Only show section if not hidden
+  const showSection = config.fields.salary.mode !== 'hidden';
+  const isRequired = config.fields.salary.mode === 'required';
+</script>
+
+{#if showSection}
+  <Field.Set>
+    <Field.Legend>Salary Information</Field.Legend>
+    <Field.Description>
+      {#if isRequired}
+        Salary range is required for this job board
+      {:else}
+        Optional salary information helps attract qualified candidates
+      {/if}
+    </Field.Description>
+    <Field.Separator />
+    <Field.Group class="@container/field-group">
+
+      <Field.Field
+        orientation="responsive"
+        class="grid grid-cols-1 gap-4 @[480px]/field-group:grid-cols-[2fr_3fr]"
+      >
+        <Field.Content>
+          <Field.Label>Salary Range {isRequired ? '*' : ''}</Field.Label>
+          <Field.Description>Annual salary range for this position</Field.Description>
+        </Field.Content>
+        <div class="flex flex-col gap-4">
+          <div class="flex gap-2 items-center">
+            <Input
+              type="number"
+              placeholder="Min"
+              value={salaryMin?.toString() || ''}
+              oninput={(e) => {
+                const val = e.currentTarget.value;
+                fields.salary?.min.set(val ? parseInt(val, 10) : undefined);
+              }}
+              class="flex-1"
+            />
+            <span class="text-muted-foreground">to</span>
+            <Input
+              type="number"
+              placeholder="Max"
+              value={salaryMax?.toString() || ''}
+              oninput={(e) => {
+                const val = e.currentTarget.value;
+                fields.salary?.max.set(val ? parseInt(val, 10) : undefined);
+              }}
+              class="flex-1"
+            />
+            <Select.Root
+              selected={{ value: currency, label: currency }}
+              onSelectedChange={(v) => {
+                if (v) fields.salary?.currency.set(v.value as any);
+              }}
+            >
+              <Select.Trigger class="w-24">
+                <Select.Value />
+              </Select.Trigger>
+              <Select.Content>
+                <Select.Item value="USD">USD</Select.Item>
+                <Select.Item value="EUR">EUR</Select.Item>
+                <Select.Item value="GBP">GBP</Select.Item>
+                <Select.Item value="CAD">CAD</Select.Item>
+                <Select.Item value="AUD">AUD</Select.Item>
+              </Select.Content>
+            </Select.Root>
+          </div>
+          {#each getFormFieldIssues(fields.salary) as issue, i (i)}
+            <Field.Error>{issue.message}</Field.Error>
+          {/each}
+        </div>
+      </Field.Field>
+
+    </Field.Group>
+  </Field.Set>
+{/if}
+```
+
+#### Step 3.5: Update Main Form
+
+**File**: `src/routes/(public)/post-a-job/+page.svelte` (UPDATE)
+
+```svelte
+<script lang="ts">
+  // ... existing imports ...
+  import SalarySection from '$lib/features/jobs/components/job-posting/form-sections/salary-section.svelte';
 
   let { data }: { data: PageData } = $props();
 
   const pricing = data.pricing;
-  const jobBoardConfig = data.jobBoardConfig; // Add this
+  const jobBoardConfig = data.jobBoardConfig;
 
   // ... rest of code ...
 </script>
@@ -968,11 +1328,9 @@ Pass config to all form sections:
 </form>
 ```
 
-#### Step 3.5: Update Types
+#### Step 3.6: Update Types
 
 **File**: `src/lib/features/jobs/components/job-posting/types.ts` (UPDATE)
-
-Add `location` field to the types:
 
 ```typescript
 import type { submitJobPosting } from '$lib/features/jobs/actions/post-job.remote';
@@ -980,9 +1338,103 @@ import type { submitJobPosting } from '$lib/features/jobs/actions/post-job.remot
 export type PublicJobPostingFields = typeof submitJobPosting.fields;
 ```
 
-### Phase 4: Testing (2-3 hours)
+### Phase 4: Comprehensive Testing (3-4 hours)
 
-#### Step 4.1: Preset Tests
+#### Step 4.1: Config Validation Tests
+
+**File**: `src/lib/config/jobs/config.server.test.ts` (NEW)
+
+```typescript
+import { describe, it, expect } from 'vitest';
+import { resolveConfig } from './presets.server';
+import type { JobBoardConfig } from './schema.server';
+
+describe('Config Resolution and Validation', () => {
+  it('rejects config with invalid defaultLocationType', () => {
+    expect(() => {
+      resolveConfig({
+        preset: 'custom',
+        allowedLocationTypes: ['remote'],
+        defaultLocationType: 'onsite', // Not in allowedLocationTypes!
+        fields: {
+          location: { mode: 'hidden' },
+          hiringLocation: { mode: 'optional' },
+          workingPermits: { mode: 'hidden' },
+          salary: { mode: 'optional' }
+        }
+      });
+    }).toThrow(/must be in allowedLocationTypes/);
+  });
+
+  it('rejects local-only config with hidden location', () => {
+    expect(() => {
+      resolveConfig({
+        preset: 'custom',
+        allowedLocationTypes: ['onsite'],
+        fields: {
+          location: { mode: 'hidden' }, // Invalid for local-only!
+          hiringLocation: { mode: 'hidden' },
+          workingPermits: { mode: 'hidden' },
+          salary: { mode: 'optional' }
+        }
+      });
+    }).toThrow(/cannot be hidden for local-only/);
+  });
+
+  it('rejects remote-only config with required location', () => {
+    expect(() => {
+      resolveConfig({
+        preset: 'custom',
+        allowedLocationTypes: ['remote'],
+        fields: {
+          location: { mode: 'required' }, // Invalid for remote-only!
+          hiringLocation: { mode: 'optional' },
+          workingPermits: { mode: 'hidden' },
+          salary: { mode: 'optional' }
+        }
+      });
+    }).toThrow(/should not be required for remote-only/);
+  });
+
+  it('accepts valid custom config', () => {
+    const config = resolveConfig({
+      preset: 'custom',
+      allowedLocationTypes: ['remote', 'onsite'],
+      defaultLocationType: 'remote',
+      fields: {
+        location: { mode: 'conditional' },
+        hiringLocation: { mode: 'optional' },
+        workingPermits: { mode: 'hidden' },
+        salary: { mode: 'required' }
+      }
+    });
+
+    expect(config.preset).toBe('custom');
+    expect(config.fields.salary.mode).toBe('required');
+  });
+
+  it('custom preset requires explicit config', () => {
+    expect(() => {
+      resolveConfig({ preset: 'custom' });
+    }).toThrow(/requires explicit configuration/);
+  });
+
+  it('merges user overrides with preset', () => {
+    const config = resolveConfig({
+      preset: 'remote-first',
+      fields: {
+        salary: { mode: 'required' }
+      }
+    });
+
+    expect(config.preset).toBe('remote-first');
+    expect(config.fields.salary.mode).toBe('required');
+    expect(config.fields.location.mode).toBe('conditional'); // From preset
+  });
+});
+```
+
+#### Step 4.2: Preset Tests
 
 **File**: `src/lib/config/jobs/presets.server.test.ts` (NEW)
 
@@ -993,7 +1445,7 @@ import {
   LOCAL_ONLY_PRESET,
   HYBRID_FIRST_PRESET,
   FLEXIBLE_PRESET,
-  resolveConfig
+  getPreset
 } from './presets.server';
 import { jobBoardConfigSchema } from './schema.server';
 
@@ -1008,8 +1460,8 @@ describe('Job Board Presets', () => {
 
   it('local-only preset has correct settings', () => {
     expect(LOCAL_ONLY_PRESET.allowedLocationTypes).toEqual(['onsite']);
-    expect(LOCAL_ONLY_PRESET.fields.location.required).toBe('always');
-    expect(LOCAL_ONLY_PRESET.fields.hiringLocation.visible).toBe(false);
+    expect(LOCAL_ONLY_PRESET.fields.location.mode).toBe('required');
+    expect(LOCAL_ONLY_PRESET.fields.hiringLocation.mode).toBe('hidden');
   });
 
   it('hybrid-first preset validates', () => {
@@ -1020,24 +1472,17 @@ describe('Job Board Presets', () => {
     expect(() => jobBoardConfigSchema.parse(FLEXIBLE_PRESET)).not.toThrow();
   });
 
-  it('resolveConfig merges user config with preset', () => {
-    const userConfig = {
-      preset: 'remote-first' as const,
-      fields: {
-        salary: { visible: true, required: true }
-      }
-    };
+  it('getPreset returns null for custom', () => {
+    expect(getPreset('custom')).toBeNull();
+  });
 
-    const resolved = resolveConfig(userConfig);
-
-    expect(resolved.preset).toBe('remote-first');
-    expect(resolved.fields.salary.required).toBe(true);
-    expect(resolved.fields.location.required).toBe('conditional');
+  it('getPreset returns correct preset', () => {
+    expect(getPreset('local-only')).toBe(LOCAL_ONLY_PRESET);
   });
 });
 ```
 
-#### Step 4.2: Validator Tests
+#### Step 4.3: Validator Tests
 
 **File**: `src/lib/features/jobs/validators.test.ts` (NEW)
 
@@ -1089,7 +1534,7 @@ describe('Dynamic Job Validators', () => {
         salary: { currency: 'USD' }
       };
 
-      expect(() => schema.parse(job)).toThrow();
+      expect(() => schema.parse(job)).toThrow(/Office location is required for onsite/);
     });
 
     it('accepts onsite job with location', () => {
@@ -1114,7 +1559,44 @@ describe('Dynamic Job Validators', () => {
         salary: { currency: 'USD' }
       };
 
-      expect(() => schema.parse(job)).toThrow();
+      expect(() => schema.parse(job)).toThrow(/Office location is required for hybrid/);
+    });
+
+    it('requires timezones when hiring by timezone', () => {
+      const job = {
+        ...baseJob,
+        locationType: 'remote',
+        hiringLocation: { type: 'timezone', timezones: [] },
+        workingPermits: { type: 'no-specific', permits: [] },
+        salary: { currency: 'USD' }
+      };
+
+      expect(() => schema.parse(job)).toThrow(/timezone is required/);
+    });
+
+    it('accepts timezone hiring with timezones', () => {
+      const job = {
+        ...baseJob,
+        locationType: 'remote',
+        hiringLocation: { type: 'timezone', timezones: ['America/New_York'] },
+        workingPermits: { type: 'no-specific', permits: [] },
+        salary: { currency: 'USD' }
+      };
+
+      expect(() => schema.parse(job)).not.toThrow();
+    });
+
+    it('rejects location over 255 characters', () => {
+      const job = {
+        ...baseJob,
+        locationType: 'onsite',
+        location: 'a'.repeat(256),
+        hiringLocation: { type: 'worldwide', timezones: [] },
+        workingPermits: { type: 'no-specific', permits: [] },
+        salary: { currency: 'USD' }
+      };
+
+      expect(() => schema.parse(job)).toThrow(/under 255 characters/);
     });
   });
 
@@ -1128,7 +1610,7 @@ describe('Dynamic Job Validators', () => {
         salary: { currency: 'USD' }
       };
 
-      expect(() => schema.parse(job)).toThrow();
+      expect(() => schema.parse(job)).toThrow(/Office location is required/);
     });
 
     it('accepts onsite job with location', () => {
@@ -1142,8 +1624,28 @@ describe('Dynamic Job Validators', () => {
       expect(() => schema.parse(job)).not.toThrow();
     });
 
-    it('only allows onsite location type', () => {
-      expect(LOCAL_ONLY_PRESET.allowedLocationTypes).toEqual(['onsite']);
+    it('schema only allows onsite location type', () => {
+      const job = {
+        ...baseJob,
+        locationType: 'remote' as any, // Should fail - not allowed
+        location: 'New York',
+        salary: { currency: 'USD' }
+      };
+
+      expect(() => schema.parse(job)).toThrow();
+    });
+
+    it('does not include hiringLocation in schema', () => {
+      const job = {
+        ...baseJob,
+        locationType: 'onsite',
+        location: 'New York',
+        hiringLocation: { type: 'worldwide', timezones: [] }, // Should be ignored
+        salary: { currency: 'USD' }
+      };
+
+      const result = schema.parse(job);
+      expect(result).not.toHaveProperty('hiringLocation');
     });
   });
 
@@ -1159,7 +1661,7 @@ describe('Dynamic Job Validators', () => {
         salary: { currency: 'USD' }
       };
 
-      expect(() => schema.parse(job)).toThrow();
+      expect(() => schema.parse(job)).toThrow(/Office location is required for hybrid/);
     });
 
     it('accepts hybrid job with location', () => {
@@ -1174,18 +1676,31 @@ describe('Dynamic Job Validators', () => {
 
       expect(() => schema.parse(job)).not.toThrow();
     });
+
+    it('defaults to hybrid location type', () => {
+      const job = {
+        ...baseJob,
+        location: 'Austin, TX',
+        hiringLocation: { type: 'worldwide', timezones: [] },
+        workingPermits: { type: 'no-specific', permits: [] },
+        salary: { currency: 'USD' }
+      };
+
+      const result = schema.parse(job);
+      expect(result.locationType).toBe('hybrid');
+    });
   });
 });
 ```
 
 ## Implementation Timeline
 
-**Total: 9-13 hours**
+**Total: 13-17 hours** (increased due to additional validation and testing)
 
-- Phase 1: Configuration System (2-3 hours)
-- Phase 2: Dynamic Validators (2-3 hours)
-- Phase 3: Form Components (3-4 hours)
-- Phase 4: Testing (2-3 hours)
+- Phase 1: Configuration System (3-4 hours)
+- Phase 2: Type-Safe Validators (3-4 hours)
+- Phase 3: Form Components (4-5 hours)
+- Phase 4: Comprehensive Testing (3-4 hours)
 
 ## Success Criteria
 
@@ -1195,12 +1710,41 @@ describe('Dynamic Job Validators', () => {
 ✅ Form adapts reactively to location type selection
 ✅ Validators enforce conditional requirements
 ✅ All presets work correctly and pass tests
+✅ **Type safety maintained throughout**
+✅ **Invalid configs are rejected with clear errors**
+✅ **Hidden fields don't appear in schema or validation**
+✅ **Max length validation matches DB schema**
+✅ **Timezone validation when required**
+✅ **Clear, contextual error messages**
 ✅ Code is simple, testable, and flexible
-✅ No backwards compatibility concerns
 
-## Configuration Examples
+## Documentation & User Guide
 
-### Remote-First Tech Board
+### Choosing Your Preset
+
+**Decision Tree:**
+
+```
+Are you building a job board for physical locations only?
+(restaurants, retail, healthcare, hospitality)
+  → Use 'local-only' preset
+
+Are you building a tech/startup remote-first job board?
+  → Use 'remote-first' preset
+
+Are you building a post-COVID hybrid job board?
+  → Use 'hybrid-first' preset
+
+Do you want all options with no defaults?
+  → Use 'flexible' preset
+
+Do you need complete custom control?
+  → Use 'custom' preset (advanced)
+```
+
+### Configuration Examples
+
+#### Remote-First Tech Board (Default)
 
 ```typescript
 jobBoard: {
@@ -1208,9 +1752,14 @@ jobBoard: {
 }
 ```
 
-**Result**: Remote default, location required for onsite/hybrid, timezone filtering
+**Result:**
+- ✅ Remote, hybrid, onsite options
+- ✅ Defaults to remote
+- ✅ Location required for onsite/hybrid
+- ✅ Timezone filtering available
+- ✅ All optional fields visible
 
-### Restaurant Job Board
+#### Restaurant/Retail Job Board
 
 ```typescript
 jobBoard: {
@@ -1218,9 +1767,13 @@ jobBoard: {
 }
 ```
 
-**Result**: Onsite only, location always required, no remote fields
+**Result:**
+- ✅ Onsite only
+- ✅ Location always required
+- ❌ No remote-specific fields
+- ❌ No timezone/hiring location fields
 
-### Post-COVID Mixed Board
+#### Post-COVID Mixed Board
 
 ```typescript
 jobBoard: {
@@ -1228,9 +1781,24 @@ jobBoard: {
 }
 ```
 
-**Result**: Hybrid default, location required for onsite/hybrid, all options available
+**Result:**
+- ✅ All location types
+- ✅ Defaults to hybrid
+- ✅ Location required for onsite/hybrid
+- ✅ All options available
 
-### Custom Configuration
+#### Custom: Override Preset
+
+```typescript
+jobBoard: {
+  preset: 'remote-first',
+  fields: {
+    salary: { mode: 'required' } // Make salary required
+  }
+}
+```
+
+#### Custom: Full Control
 
 ```typescript
 jobBoard: {
@@ -1238,24 +1806,148 @@ jobBoard: {
   allowedLocationTypes: ['remote', 'onsite'],
   defaultLocationType: 'remote',
   fields: {
-    location: { visible: true, required: 'conditional' },
-    hiringLocation: { visible: true, required: true },
-    workingPermits: { visible: false, required: false },
-    salary: { visible: true, required: true }
+    location: { mode: 'conditional' },
+    hiringLocation: { mode: 'optional' },
+    workingPermits: { mode: 'hidden' },
+    salary: { mode: 'required' }
   }
 }
 ```
 
+### Field Modes Explained
+
+- **`hidden`**: Field not shown, not in schema, not validated
+- **`optional`**: Field shown, user can leave it empty
+- **`required`**: Field shown, user must fill it out
+- **`conditional`**: Field requirement depends on locationType
+  - For `location`: required when onsite/hybrid selected
+
+### Important Notes
+
+#### Config Changes Require Restart
+
+⚠️ **Configuration changes require a server restart** to take effect.
+
+In production, the config is cached on first use. To apply changes:
+```bash
+# After editing site.server.ts
+pm2 restart your-app
+# or
+systemctl restart your-app
+```
+
+In development, the config refreshes automatically on each request.
+
+#### Data Migration
+
+If you change presets on an existing job board with posted jobs, you may need to:
+
+1. **Add missing required fields**: If switching to a preset that requires new fields (e.g., `remote-first` → `local-only` requires location), run a migration to add default values:
+
+```typescript
+// Migration example
+await db.update(jobs)
+  .set({ location: 'Location TBD - Please contact employer' })
+  .where(and(
+    eq(jobs.locationType, 'onsite'),
+    isNull(jobs.location)
+  ));
+```
+
+2. **Clean up unused fields**: If switching to a preset that hides fields (e.g., `remote-first` → `local-only` hides hiring location), data will persist but won't be shown.
+
+3. **Validate existing jobs**: Run a script to validate all existing jobs against the new schema and flag issues.
+
+### Troubleshooting
+
+#### "Config validation failed"
+
+Check that your config is logically consistent:
+- `defaultLocationType` must be in `allowedLocationTypes`
+- Local-only boards shouldn't hide location field
+- Remote-only boards shouldn't require location field
+
+#### "Field is undefined in form"
+
+Make sure the field is not `hidden` in your config. Hidden fields are not included in the schema.
+
+#### Type errors in validators
+
+Don't use `z.infer<ReturnType<typeof buildPublicJobPostingSchema>>`. Use the exported `ValidatedJobPosting` type instead.
+
+#### Changes not appearing
+
+Remember: **config changes require server restart** in production.
+
+## Testing Checklist
+
+Before deploying, test each preset:
+
+### Remote-First Preset
+- [ ] Can post remote job without location
+- [ ] Cannot post onsite job without location
+- [ ] Cannot post hybrid job without location
+- [ ] Can select timezones for remote job
+- [ ] Form shows all location types
+- [ ] Timezone field appears for remote/hybrid
+
+### Local-Only Preset
+- [ ] Cannot post job without location
+- [ ] Only onsite option appears
+- [ ] No timezone fields shown
+- [ ] No hiring location fields shown
+- [ ] Location always required
+
+### Hybrid-First Preset
+- [ ] Defaults to hybrid
+- [ ] Cannot post hybrid without location
+- [ ] Can post remote without location
+- [ ] All options available
+- [ ] Form adapts to selection
+
+### Custom Preset
+- [ ] Config validation works
+- [ ] Overrides apply correctly
+- [ ] Invalid configs rejected
+- [ ] Fields show/hide correctly
+
 ## Next Steps
 
-1. ✅ Review and approve plan
-2. Implement Phase 1 (Configuration)
-3. Implement Phase 2 (Validators)
-4. Implement Phase 3 (Components)
-5. Implement Phase 4 (Tests)
+1. ✅ Review and approve updated plan
+2. Implement Phase 1 (Configuration System)
+3. Implement Phase 2 (Type-Safe Validators)
+4. Implement Phase 3 (Form Components)
+5. Implement Phase 4 (Comprehensive Testing)
 6. Manual testing of all presets
-7. Documentation updates
+7. Documentation updates in README
+8. Add visual documentation (screenshots)
+9. Create config testing page (dev-only)
+10. Add migration guide for existing users
 
 ---
 
-**Ready to implement?**
+## Improvements Over Original Plan
+
+### Critical Fixes ✅
+1. Fixed type safety - no more broken `z.infer<ReturnType<...>>`
+2. Simplified field config - single `mode` field instead of `visible` + `required`
+3. Added config validation - prevents invalid combinations
+4. Added timezone validation - required when type='timezone'
+5. Added length validation - matches DB schema (255 chars)
+6. Fixed custom preset - proper null handling, no type assertions
+7. Implemented salary section - was missing
+8. Conditionally build schema - hidden fields excluded
+9. Better cache management - documented, dev mode bypass
+10. Contextual error messages - helps users understand why
+
+### Enhancements ✅
+1. Comprehensive config validation tests
+2. Logical consistency checks
+3. Clear documentation with decision tree
+4. Troubleshooting guide
+5. Data migration guidance
+6. Testing checklist
+7. Better developer experience
+8. Production-ready for commercial product
+
+**Ready to implement!**

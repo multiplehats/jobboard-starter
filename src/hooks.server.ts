@@ -11,12 +11,14 @@ initPaymentSystem();
 
 const betterAuthHandler: Handle = async ({ event, resolve }) => {
 	event.locals.getSession = auth.api.getSession;
+	event.locals.isAdmin = false;
 
 	const session = await auth.api.getSession({ headers: event.request.headers });
 
 	if (session) {
 		event.locals.session = session.session;
 		event.locals.user = session.user;
+		event.locals.isAdmin = session.user?.role === 'admin';
 	}
 
 	return svelteKitHandler({ event, resolve, auth, building });

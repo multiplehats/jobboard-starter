@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { productsConfigSchema } from './schema.server';
+import { productsConfigSchema } from '$lib/config/products/schema.server.js';
 
 describe('Products Schema Validation', () => {
 	describe('productsConfigSchema', () => {

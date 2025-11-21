@@ -1,4 +1,5 @@
 import { env } from '$env/dynamic/private';
+import type { JobBoardConfig } from './jobs';
 
 /**
  * Site configuration.
@@ -35,6 +36,57 @@ export const siteConfig = {
 	auth: {
 		authPageImage: '/public/auth-screen.jpg'
 	},
+
+	/**
+	 * Job Board Configuration
+	 *
+	 * Choose a preset that matches your job board type:
+	 *
+	 * - 'remote-first': Tech/startup boards (default)
+	 *   → All location types, defaults to remote, location required for onsite/hybrid
+	 *
+	 * - 'local-only': Restaurant, retail, healthcare
+	 *   → Only onsite jobs, location always required, no remote fields
+	 *
+	 * - 'hybrid-first':
+	 *   → All location types, defaults to hybrid, location required for onsite/hybrid
+	 *
+	 * - 'flexible': General purpose
+	 *   → All location types, no defaults, location conditional
+	 *
+	 * - 'custom': Full customization (advanced)
+	 *   → Requires explicit allowedLocationTypes and fields configuration
+	 *
+	 * Examples:
+	 *
+	 * // Use preset as-is
+	 * jobBoard: { preset: 'local-only' }
+	 *
+	 * // Override preset settings
+	 * jobBoard: {
+	 *   preset: 'remote-first',
+	 *   fields: {
+	 *     salary: { mode: 'required' }
+	 *   }
+	 * }
+	 *
+	 * // Full custom configuration
+	 * jobBoard: {
+	 *   preset: 'custom',
+	 *   allowedLocationTypes: ['remote', 'onsite'],
+	 *   defaultLocationType: 'remote',
+	 *   fields: {
+	 *     location: { mode: 'conditional' },
+	 *     hiringLocation: { mode: 'optional' },
+	 *     workingPermits: { mode: 'hidden' },
+	 *     salary: { mode: 'required' }
+	 *   }
+	 * }
+	 */
+	jobBoard: {
+		preset: 'hybrid-first'
+	} as Partial<JobBoardConfig>,
+
 	featuredRecruiters: [
 		{
 			name: 'Linear',

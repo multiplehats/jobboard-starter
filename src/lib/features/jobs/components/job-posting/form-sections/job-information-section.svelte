@@ -11,7 +11,7 @@
 	import { Calendar } from '$lib/components/ui/calendar/index.js';
 	import * as Popover from '$lib/components/ui/popover/index.js';
 	import { EdraEditor, EdraDragHandleExtended } from '$lib/components/edra/shadcn';
-	import JobDescriptionToolbar from '$lib/components/edra/shadcn/JobDescriptionToolbar.svelte';
+	import JobDescriptionToolbar from '$lib/components/edra/shadcn/job-description-toolbar.svelte';
 	import CalendarIcon from '@lucide/svelte/icons/calendar';
 	import { getLocalTimeZone, today, parseDate } from '@internationalized/date';
 	import { jobTypesList, seniorityLevelsList } from '$lib/features/jobs/constants';
@@ -216,7 +216,9 @@
 		>
 			<Field.Content>
 				<Field.Label for="job-application">Application Link or Email *</Field.Label>
-				<Field.Description>Enter a URL or email address where candidates can apply</Field.Description>
+				<Field.Description
+					>Enter a URL or email address where candidates can apply</Field.Description
+				>
 			</Field.Content>
 			<div class="flex flex-col gap-2">
 				<Input

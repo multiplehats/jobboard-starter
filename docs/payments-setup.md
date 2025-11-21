@@ -9,9 +9,16 @@ Complete guide to setting up and customizing the payment system for your job boa
 - [Environment Variables](#environment-variables)
 - [Configuration](#configuration)
 - [Stripe Setup](#stripe-setup)
+- [Polar Setup](#polar-setup)
 - [Testing](#testing)
 - [Customization](#customization)
 - [Troubleshooting](#troubleshooting)
+
+## Related Documentation
+
+- [Payment Data Flow](./payment-data-flow.md) - Complete explanation of how env vars flow to checkout
+- [Polar Setup](./polar-setup.md) - Polar-specific setup guide
+- [Backend Architecture](./backend-architecture.md) - System architecture overview
 
 ---
 
@@ -426,6 +433,31 @@ The webhook handler automatically:
 - Routes to appropriate handler
 - Updates database
 - Emits events to custom handlers
+
+---
+
+## Polar Setup
+
+For complete Polar setup instructions, see [Polar Setup Guide](./polar-setup.md).
+
+**Quick Overview:**
+
+1. **Get Polar credentials** from [polar.sh/dashboard](https://polar.sh/dashboard)
+2. **Add to `.env`:**
+   ```bash
+   POLAR_API_KEY="polar_at_..."
+   POLAR_WEBHOOK_SECRET="whsec_..."
+   POLAR_SERVER="sandbox"
+   ```
+3. **Run sync script:**
+   ```bash
+   pnpm run payments:sync:polar
+   ```
+4. **Copy product/price IDs to `.env`**
+5. **Configure webhook** at polar.sh/dashboard
+6. **Test with test cards** in sandbox mode
+
+See [Polar Setup Guide](./polar-setup.md) for detailed instructions, webhook configuration, and troubleshooting.
 
 ---
 

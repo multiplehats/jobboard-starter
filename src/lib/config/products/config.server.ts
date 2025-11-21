@@ -1,5 +1,6 @@
 import { isPredefinedUpsellId, PREDEFINED_UPSELL_IDS } from './constants.server';
 import type { ProductsConfig } from './schema.server';
+import { env } from '$env/dynamic/private';
 
 /**
  * Default products configuration
@@ -32,33 +33,57 @@ export const DEFAULT_PRODUCTS_CONFIG: ProductsConfig = {
 
 		// Display (optional - uses i18n if not provided)
 		name: 'Job Posting',
-		description: '30-day job listing'
+		description: '30-day job listing',
 
-		// Provider mappings (add when you have Stripe products set up)
-		// stripe: {
-		// 	productId: env.STRIPE_PRODUCT_JOB_POSTING || '',
-		// 	priceId: env.STRIPE_PRICE_JOB_POSTING || ''
-		// }
+		// Provider mappings (add when you have products set up)
+		// Stripe
+		...(env.STRIPE_PRODUCT_JOB_POSTING_BASE && {
+			stripe: {
+				productId: env.STRIPE_PRODUCT_JOB_POSTING_BASE,
+				priceId: env.STRIPE_PRICE_JOB_POSTING_BASE || ''
+			}
+		}),
+
+		// Polar
+		...(env.POLAR_PRODUCT_JOB_POSTING_BASE && {
+			polar: {
+				productId: env.POLAR_PRODUCT_JOB_POSTING_BASE,
+				priceId: env.POLAR_PRICE_JOB_POSTING_BASE || ''
+			}
+		})
 	},
 
 	upsells: [
 		{
 			id: 'email_newsletter', // Predefined ID - name/description from i18n
 			price: 5000, // $50.00 in cents
-			enabled: true
+			enabled: true,
 			// badge: 'Popular'
 
-			// Provider mappings (add when you have Stripe products set up)
-			// stripe: {
-			// 	productId: env.STRIPE_PRODUCT_UPSELL_EMAIL_NEWSLETTER || '',
-			// 	priceId: env.STRIPE_PRICE_UPSELL_EMAIL_NEWSLETTER || ''
-			// }
+			// Provider mappings (add when you have products set up)
+			// Stripe
+			...(env.STRIPE_PRODUCT_UPSELL_EMAIL_NEWSLETTER && {
+				stripe: {
+					productId: env.STRIPE_PRODUCT_UPSELL_EMAIL_NEWSLETTER,
+					priceId: env.STRIPE_PRICE_UPSELL_EMAIL_NEWSLETTER || ''
+				}
+			}),
+
+			// Polar
+			...(env.POLAR_PRODUCT_UPSELL_EMAIL_NEWSLETTER && {
+				polar: {
+					productId: env.POLAR_PRODUCT_UPSELL_EMAIL_NEWSLETTER,
+					priceId: env.POLAR_PRICE_UPSELL_EMAIL_NEWSLETTER || ''
+				}
+			})
 		}
 	],
 
 	// Payment settings (optional)
 	payment: {
-		defaultProvider: 'stripe',
+		// Auto-detect default provider based on env vars
+		// Priority: Polar > Stripe
+		defaultProvider: env.POLAR_API_KEY ? 'polar' : 'stripe',
 		webhooks: {
 			verifySignature: true,
 			logEvents: true

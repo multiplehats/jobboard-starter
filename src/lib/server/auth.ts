@@ -7,6 +7,7 @@ import {
 	magicLink,
 	lastLoginMethod,
 	multiSession,
+	admin as adminPlugin,
 	type Organization,
 	type Member
 } from 'better-auth/plugins';
@@ -38,6 +39,7 @@ export const auth = betterAuth({
 		}
 	},
 	plugins: [
+		adminPlugin(),
 		organization({
 			ac, // Our access control instance
 			roles: {

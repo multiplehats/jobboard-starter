@@ -28,12 +28,12 @@ export class PolarAdapter implements PaymentAdapter {
 	private polar: Polar;
 
 	constructor() {
-		if (!env.POLAR_ACCESS_TOKEN) {
-			throw new Error('POLAR_ACCESS_TOKEN environment variable is required');
+		if (!env.POLAR_API_KEY) {
+			throw new Error('POLAR_API_KEY environment variable is required');
 		}
 
 		this.polar = new Polar({
-			accessToken: env.POLAR_ACCESS_TOKEN,
+			accessToken: env.POLAR_API_KEY,
 			server: (env.POLAR_SERVER as 'sandbox' | 'production') || 'sandbox'
 		});
 	}

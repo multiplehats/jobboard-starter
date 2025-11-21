@@ -9,6 +9,7 @@ declare global {
 			session?: SessionObj['session'];
 			getSession: AuthConfig['api']['getSession'];
 			auth: () => Promise<SessionObj | null>;
+			isAdmin: boolean;
 		}
 		interface PageData {
 			config: {

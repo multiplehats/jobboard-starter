@@ -13,6 +13,7 @@
 		placeholder?: string;
 		class?: string;
 		disabled?: boolean;
+		multiple?: boolean;
 		onchange?: (value: string[]) => void;
 	}
 
@@ -21,6 +22,7 @@
 		placeholder = 'Select timezones...',
 		class: className,
 		disabled = false,
+		multiple = true,
 		onchange
 	}: Props = $props();
 
@@ -74,10 +76,16 @@
 	}
 
 	function toggleTimezone(timezoneValue: string) {
-		if (value.includes(timezoneValue)) {
-			value = value.filter((v) => v !== timezoneValue);
+		if (multiple) {
+			if (value.includes(timezoneValue)) {
+				value = value.filter((v) => v !== timezoneValue);
+			} else {
+				value = [...value, timezoneValue];
+			}
 		} else {
-			value = [...value, timezoneValue];
+			// Single select mode
+			value = [timezoneValue];
+			closeAndFocusTrigger();
 		}
 		onchange?.(value);
 	}

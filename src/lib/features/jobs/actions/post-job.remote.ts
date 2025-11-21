@@ -1,9 +1,22 @@
 import { command, form } from '$app/server';
-import { publicJobPostingSchema } from '$lib/features/jobs/validators';
+import { buildPublicJobPostingSchema } from '$lib/features/jobs/validators';
 import type { PublicJobPostingInput } from '$lib/features/jobs/validators';
+import { getJobBoardConfig } from '$lib/config/jobs/config.server';
 import { z } from 'zod';
 
 export type JobPostingFormData = PublicJobPostingInput;
+
+export type SubmitJobOutput = {
+	success: boolean;
+	jobId: string;
+	message: string;
+};
+
+/**
+ * Get the dynamic schema based on job board config
+ * This runs at request time, using the cached config
+ */
+const getSchema = () => buildPublicJobPostingSchema(getJobBoardConfig());
 
 export const prefillFromATS = command(z.string(), async (atsUrl: string) => {
 	// TODO: Implement ATS prefill logic
@@ -13,7 +26,7 @@ export const prefillFromATS = command(z.string(), async (atsUrl: string) => {
 /**
  * Submit a new public job posting
  */
-export const submitJobPosting = form(publicJobPostingSchema, async (data) => {
+export const submitJobPosting = form(getSchema(), async (data) => {
 	// TODO: Implement job posting logic:
 	// 1. Create/find organization
 	// 2. Create job with status 'awaiting_payment'

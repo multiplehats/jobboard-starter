@@ -33,7 +33,7 @@ Add to your `.env` file:
 
 ```bash
 # Polar Configuration
-POLAR_ACCESS_TOKEN="polar_at_..."
+POLAR_API_KEY="polar_at_..."
 POLAR_WEBHOOK_SECRET="whsec_..."
 POLAR_SERVER="sandbox"  # or "production"
 ```
@@ -174,11 +174,13 @@ Polar provides test payment methods in sandbox mode. Use these for testing:
 
 ### Test Flow
 
-1. Create a job posting
-2. Select upsells (optional)
-3. Click "Proceed to Payment"
-4. Use test card to complete payment
-5. Verify job is published in database
+1. Ensure Polar product/price IDs are in `.env` and products config
+2. Restart your dev server to load new env vars
+3. Create a job posting
+4. Select upsells (optional)
+5. Click "Proceed to Payment"
+6. Use test card to complete payment
+7. Verify job is published in database
 
 ### Verify in Database
 
@@ -207,6 +209,44 @@ The Polar adapter handles these webhook events:
 | `order.refunded` | `payment.refunded` | Update order/payment status, unpublish job |
 
 ## Customization
+
+### How Product IDs Flow Through the System
+
+For a complete explanation of how environment variables flow through to checkout sessions, see [Payment Data Flow](./payment-data-flow.md).
+
+**Quick Summary:**
+
+1. **Environment Variables** (`.env`):
+   ```bash
+   POLAR_PRODUCT_JOB_POSTING_BASE="prod_ABC123"
+   POLAR_PRICE_JOB_POSTING_BASE="price_DEF456"
+   ```
+
+2. **Products Config** (`src/lib/config/products/config.server.ts`):
+   ```typescript
+   import { env } from '$env/dynamic/private';
+
+   jobPosting: {
+     price: 9900,
+     ...(env.POLAR_PRODUCT_JOB_POSTING_BASE && {
+       polar: {
+         productId: env.POLAR_PRODUCT_JOB_POSTING_BASE,
+         priceId: env.POLAR_PRICE_JOB_POSTING_BASE
+       }
+     })
+   }
+   ```
+
+3. **Checkout Service** uses the config to get price IDs:
+   ```typescript
+   // In checkout.ts
+   const config = getProductsConfig();
+   const priceId = config.jobPosting.polar?.priceId;
+   ```
+
+4. **Polar Adapter** creates checkout session with the price ID
+
+See [Payment Data Flow](./payment-data-flow.md) for detailed diagrams and debugging tips.
 
 ### Custom Payment Handlers
 
