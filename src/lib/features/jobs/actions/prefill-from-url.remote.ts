@@ -2,7 +2,7 @@ import { form } from '$app/server';
 import { generateText } from 'ai';
 import { getFirecrawlClient } from '$lib/server/firecrawl';
 import { getOpenRouterClient } from '$lib/server/openrouter';
-import { siteConfig } from '$lib/server/site-config';
+import { siteConfig } from '$lib/config/site.server';
 import { htmlToTiptapJson } from '$lib/utils/tiptap';
 import { z } from 'zod';
 import {
@@ -250,7 +250,9 @@ Generate ONLY the HTML job description content, nothing else.`,
 				// Convert HTML to Tiptap JSON format
 				const tiptapJson = htmlToTiptapJson(text);
 				extractedData.job.description = JSON.stringify(tiptapJson);
-				console.log('✓ Job description successfully enriched with AI and converted to Tiptap format');
+				console.log(
+					'✓ Job description successfully enriched with AI and converted to Tiptap format'
+				);
 			} catch (error) {
 				// If AI enrichment fails, leave description empty for manual entry
 				console.error('✗ Error enriching job description with AI:', error);

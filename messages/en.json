@@ -15,6 +15,37 @@
 		"sign_in": "Sign in"
 	},
 	"post_a_job": "Post a Job",
+	"pricing": {
+		"base_job_posting": "Job Posting",
+		"base_job_posting_description": "Post your job for {duration} days",
+		"upsells": {
+			"email_newsletter": {
+				"name": "Feature in Email Newsletter",
+				"description": "Include your job posting in our weekly newsletter sent to thousands of job seekers"
+			},
+			"extended_duration": {
+				"name": "Extended Duration",
+				"description": "Keep your job posting live for 60 days instead of 30"
+			},
+			"priority_placement": {
+				"name": "Priority Placement",
+				"description": "Pin your job to the top of search results for maximum visibility"
+			},
+			"social_media_boost": {
+				"name": "Social Media Promotion",
+				"description": "Promote your job across our social media channels"
+			},
+			"highlighted_listing": {
+				"name": "Highlighted Listing",
+				"description": "Highlight your job with special styling and border to stand out"
+			}
+		},
+		"badges": {
+			"popular": "Popular",
+			"recommended": "Recommended",
+			"best_value": "Best Value"
+		}
+	},
 	"enums": {
 		"job_types": {
 			"full_time": "Full Time",

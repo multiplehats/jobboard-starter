@@ -25,6 +25,8 @@ import ZapIcon from '@lucide/svelte/icons/zap';
 - **[Backend Architecture](./docs/backend-architecture.md)** - Complete backend architecture guide
 - **[Modal Stack](./docs/modal-stack.md)** - Modal management system
 - **[Type System Template](./docs/type-system-template.md)** - Creating types for new features
+- **[Pricing Configuration](./PRICING_CONFIG.md)** - Job posting pricing and upsells configuration
+- **[Payment Architecture](./PAYMENT_ARCHITECTURE.md)** - Complete payment system design (job postings, subscriptions, credits)
 
 # Svelte MCP Server
 

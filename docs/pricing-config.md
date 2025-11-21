@@ -10,8 +10,9 @@ This guide explains how to customize job posting pricing and upsells, keeping yo
 - **`src/lib/server/site-config.ts`** - Your pricing configuration (SAFE TO CUSTOMIZE)
 
 This separation ensures you can:
+
 - Pull upstream changes to `pricing-constants.ts` without conflicts
-- Safely customize pricing in `site-config.ts`
+- Safely customize pricing in `site-config.ts` and discard upstream changes to it (unless it's a new feature you want)
 - Use predefined IDs with automatic backend features
 - Add custom IDs for your own features
 
@@ -26,12 +27,6 @@ These IDs are defined in `pricing-constants.ts` and have built-in backend suppor
 - `priority_placement` - Pin job to top of search results
 - `social_media_boost` - Social media promotion automation
 - `highlighted_listing` - Special styling/border in listings
-
-**Benefits:**
-- Automatic backend processing via cron jobs
-- Built-in analytics tracking
-- Payment webhook integration
-- No additional code required
 
 **Note:** Selected upsells are stored in the `jobs.selectedUpsells` database column as a JSON array of upsell IDs (e.g., `["email_newsletter", "priority_placement"]`). This flexible design allows unlimited upsells without schema changes.
 
@@ -162,6 +157,7 @@ Each upsell has the following structure:
 ```
 
 **Upsell ID Guidelines:**
+
 - Use predefined IDs from `pricing-constants.ts` for automatic backend support
 - Use custom IDs for features you'll implement yourself
 - IDs must be unique within your config
@@ -170,6 +166,7 @@ Each upsell has the following structure:
 #### Common Upsells
 
 **Email Newsletter Feature**
+
 ```typescript
 {
 	id: 'email_newsletter',
@@ -182,6 +179,7 @@ Each upsell has the following structure:
 ```
 
 **Extended Duration**
+
 ```typescript
 {
 	id: 'extended_duration',
@@ -193,6 +191,7 @@ Each upsell has the following structure:
 ```
 
 **Priority Placement**
+
 ```typescript
 {
 	id: 'priority_placement',
@@ -205,6 +204,7 @@ Each upsell has the following structure:
 ```
 
 **Social Media Boost**
+
 ```typescript
 {
 	id: 'social_media_boost',
@@ -514,6 +514,7 @@ The `PricingConfig` type is automatically inferred from the schema. If you get t
 ### Validation Errors
 
 Check the browser console for Zod validation errors. Common issues:
+
 - Negative prices
 - Missing required fields
 - Duplicate upsell IDs
@@ -522,6 +523,7 @@ Check the browser console for Zod validation errors. Common issues:
 ## Support
 
 Need help? Check:
+
 - Example configurations in this guide
 - Predefined IDs: `src/lib/server/pricing-constants.ts`
 - Schema definition: `src/lib/server/site-config.ts` (pricingConfigSchema)

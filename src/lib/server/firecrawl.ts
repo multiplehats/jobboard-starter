@@ -1,4 +1,4 @@
-import { siteConfig } from './site-config';
+import { siteConfig } from '$lib/config/site.server';
 
 /**
  * This is an optional Firecrawl client generator.

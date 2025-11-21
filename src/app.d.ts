@@ -1,5 +1,5 @@
 import type { AuthConfig, SessionObj, UserObj } from '$lib/server/auth';
-import type { SiteConfig } from '$lib/server/site-config';
+import type { SiteConfig } from '$lib/config/site.server';
 
 declare global {
 	namespace App {

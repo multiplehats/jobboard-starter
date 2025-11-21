@@ -30,5 +30,5 @@ export const submitJobPosting = form(publicJobPostingSchema, async (data) => {
 		success: true,
 		jobId: 'job_' + Date.now(),
 		message: 'Job posted successfully!'
-	};
+	} satisfies SubmitJobOutput;
 });

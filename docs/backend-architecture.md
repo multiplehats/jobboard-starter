@@ -73,6 +73,10 @@ src/
 ```
 lib/features/<feature-name>/
 ├── server/           # Server-only code (protected by SvelteKit)
+│   ├── repository.ts # Data access layer
+│   ├── queries.ts    # Complex read operations
+│   └── mutations.ts  # Write operations with business logic
+├── actions/          # Remote functions (.remote.ts files)
 ├── components/       # Feature-specific UI components
 ├── validators.ts     # SHARED - Use on client AND server
 ├── types.ts          # SHARED - Use on client AND server
@@ -83,7 +87,11 @@ lib/features/<feature-name>/
 
 1. **SvelteKit Native Protection**: Any `server/` folder is automatically protected from client imports
 2. **True Feature Cohesion**: Everything related to a feature lives in one place
-3. **Clear Boundaries**: `server/` = server-only, `components/` = client-only, root level = shared
+3. **Clear Boundaries**:
+   - `server/` = server-only business logic
+   - `actions/` = remote functions (server-only but callable from client)
+   - `components/` = client-only UI
+   - Root level = shared code (validators, types)
 4. **Easy Refactoring**: Want to delete/extract a feature? Just move/delete its folder
 
 ### Import Path Conventions
@@ -169,6 +177,44 @@ Write operations with business logic, validation, and side effects.
 
 Located in: `lib/features/*/server/mutations.ts`
 
+### 5. Remote Functions (Actions)
+
+Type-safe mutations callable from client components using SvelteKit's remote functions.
+
+Located in: `lib/features/*/actions/*.remote.ts`
+
+```typescript
+// lib/features/payments/actions/create-order.remote.ts
+import { form } from '@sveltejs/kit';
+import { createOrderSchema } from '../validators';
+import { createOrder } from '../server/mutations';
+
+export const createOrderRemote = form(createOrderSchema, async (data, { locals }) => {
+	const session = await locals.auth();
+	if (!session?.user) {
+		throw new Error('Unauthorized');
+	}
+
+	const order = await createOrder(session.user.id, data.items);
+	return { orderId: order.id };
+});
+```
+
+**Usage in Components:**
+
+```svelte
+<script lang="ts">
+	import { createOrderRemote } from '$lib/features/payments/actions/create-order.remote';
+
+	async function handleSubmit() {
+		const result = await createOrderRemote({ items: [...] });
+		if (result.ok) {
+			// Success!
+		}
+	}
+</script>
+```
+
 ---
 
 ## Data Flow Architecture
@@ -196,6 +242,7 @@ kit: {
 
 - Use SvelteKit **remote functions** (form and command)
 - Type-safe, validated mutations callable from components
+- Located in `lib/features/*/actions/*.remote.ts`
 
 ### Reading Data with Page Loads
 
@@ -303,6 +350,7 @@ async findAll(pagination?: PaginationParams): Promise<PaginatedResult<Website>> 
    - Add schema to `lib/server/db/schema/`
    - Generate migration: `pnpm run db:generate`
    - Implement repository, queries, and mutations
+   - Create remote functions in `actions/` folder
    - Add page load functions in routes
    - Write tests alongside implementation
 
@@ -328,7 +376,9 @@ This architecture provides:
 ### Recommended Approach
 
 1. **Page Loads for Reads**: Use `+page.server.ts` for all data fetching
-2. **Remote Functions for Writes**: Use `form` and `command` functions
+2. **Remote Functions for Writes**: Use `form` and `command` functions in `actions/` folder
 3. **Feature-First Organization**: Co-locate all feature code
 4. **Kebab-Case File Names**: Use kebab-case for files/folders
-5. **Evolve as Needed**: Add abstractions only when complexity demands it
+5. **Repository Pattern**: Separate data access from business logic
+6. **Query/Mutation Split**: Clear separation of read and write operations
+7. **Evolve as Needed**: Add abstractions only when complexity demands it

@@ -1,7 +1,7 @@
 import type { AuthLocalization } from 'better-auth-ui-svelte';
 import * as m from '$lib/paraglide/messages';
 import type { UserState } from '$lib/features/users/types.js';
-import type { SiteConfig } from '$lib/server/site-config';
+import type { SiteConfig } from '$lib/config/site.server';
 
 /**
  * Converts paraglide messages to better-auth-ui-svelte AuthLocalization format

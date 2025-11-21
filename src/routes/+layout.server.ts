@@ -1,4 +1,4 @@
-import { siteConfig } from '$lib/server/site-config';
+import { siteConfig } from '$lib/config/site.server';
 
 export const load = async () => {
 	return {

@@ -9,7 +9,7 @@
  * - Analytics and reporting
  * - Payment webhooks
  *
- * You can define custom upsell IDs in your pricing config in site-config.ts,
+ * You can define custom upsell IDs in your pricing config in config/site.server.ts,
  * but these predefined IDs provide automatic backend functionality.
  *
  * IMPORTANT: DO NOT change these IDs once in production!
