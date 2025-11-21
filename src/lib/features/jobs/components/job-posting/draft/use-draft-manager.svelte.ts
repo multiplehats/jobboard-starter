@@ -10,11 +10,9 @@
 
 import { PersistedState } from 'runed';
 import { toast } from 'svelte-sonner';
-import type { PublicJobPostingFields } from '../types';
 import { SvelteSet } from 'svelte/reactivity';
 import type { RemoteForm } from '@sveltejs/kit';
-import { submitJobPosting } from '$lib/features/jobs/actions/post-job.remote.js';
-import type { CreateJobInput, publicJobPostingSchema } from '$lib/features/jobs/validators';
+import type { CreateJobInput } from '$lib/features/jobs/validators';
 
 /**
  * Pure UI state that's NOT stored in the form
@@ -81,20 +79,39 @@ export function useDraftManager(options: DraftManagerOptions) {
 
 	/**
 	 * Set form field values by navigating the field structure
+	 * Uses proper types from RemoteFormFields - both containers and leaf fields
+	 * implement RemoteFormFieldMethods which includes set() and value()
 	 */
 	function setFormValue(path: string, value: unknown) {
 		try {
 			const keys = path.split('.');
-			let current = form.fields.value();
 
-			for (let i = 0; i < keys.length - 1; i++) {
-				current = current[keys[i]];
-				if (!current) return;
-			}
+			// Type-safe navigation: Each field object has a set() method via RemoteFormFieldMethods
+			// We use a minimal interface type and explicit unknown cast for safe navigation
+			type FieldObject = { set(input: unknown): unknown; [key: string]: unknown };
+			let current = form.fields as unknown as FieldObject;
 
-			const lastKey = keys[keys.length - 1];
-			if (current[lastKey]?.value?.set && typeof value === 'string') {
-				current[lastKey].value.set(value);
+			// Navigate to the target field
+			for (let i = 0; i < keys.length; i++) {
+				const key = keys[i];
+				const field = current[key];
+
+				if (field === undefined || field === null) {
+					console.warn(`Path not found: ${path} (failed at ${key})`);
+					return;
+				}
+
+				// If this is the last key, set the value
+				if (i === keys.length - 1) {
+					if (typeof field === 'object' && field !== null && 'set' in field) {
+						(field as FieldObject).set(value);
+					} else {
+						console.warn(`Field ${path} does not have a set method`);
+					}
+				} else {
+					// Continue navigation
+					current = field as FieldObject;
+				}
 			}
 		} catch (e) {
 			console.error(`Failed to set form value at ${path}:`, e);
@@ -146,6 +163,27 @@ export function useDraftManager(options: DraftManagerOptions) {
 	}
 
 	/**
+	 * Recursively flatten nested object into dot-notation paths
+	 */
+	function flattenObject(obj: Record<string, unknown>, prefix = ''): Record<string, unknown> {
+		const result: Record<string, unknown> = {};
+
+		for (const [key, value] of Object.entries(obj)) {
+			const path = prefix ? `${prefix}.${key}` : key;
+
+			if (value && typeof value === 'object' && !Array.isArray(value)) {
+				// Recursively flatten nested objects
+				Object.assign(result, flattenObject(value as Record<string, unknown>, path));
+			} else {
+				// Store primitive values and arrays
+				result[path] = value;
+			}
+		}
+
+		return result;
+	}
+
+	/**
 	 * Load draft on mount
 	 */
 	$effect(() => {
@@ -154,8 +192,12 @@ export function useDraftManager(options: DraftManagerOptions) {
 
 			// 1. Restore form field values first
 			if (draft.formValues) {
-				Object.entries(draft.formValues).forEach(([key, value]) => {
-					setFormValue(key, value);
+				// Flatten the nested structure to dot-notation paths
+				const flattenedValues = flattenObject(draft.formValues);
+
+				// Set each field value
+				Object.entries(flattenedValues).forEach(([path, value]) => {
+					setFormValue(path, value);
 				});
 			}
 

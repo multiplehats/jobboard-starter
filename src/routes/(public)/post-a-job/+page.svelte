@@ -8,7 +8,7 @@
 	import PrefillFromUrlAction from '$lib/features/jobs/components/prefill-from-url-action.svelte';
 	import type { PrefillResult } from '$lib/features/jobs/actions/prefill-from-url.remote';
 	import { page } from '$app/state';
-	import { magicalTextReveal } from '$lib/utils/motion';
+	import { magicalTextReveal } from '$lib/utils/motion.js';
 	import { tick } from 'svelte';
 	import { parseDate, getLocalTimeZone, type CalendarDate } from '@internationalized/date';
 	import type { PageData } from './$types';
