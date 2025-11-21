@@ -6,7 +6,12 @@
 	import * as Popover from '$lib/components/ui/popover/index.js';
 	import { Button } from '$lib/components/ui/button/index.js';
 	import { cn } from '$lib/utils/ui.js';
-	import { getTimezoneOptions, getTimezoneLabel } from '$lib/utils/timezones.js';
+	import {
+		getTimezoneOptions,
+		getTimezoneLabel,
+		getTimezoneGroups,
+		type TimezoneGroup
+	} from '$lib/utils/timezones.js';
 
 	interface Props {
 		value?: string[];
@@ -27,6 +32,7 @@
 	}: Props = $props();
 
 	const timezones = getTimezoneOptions();
+	const { regional: regionalGroups, countrySpecific: countryGroups } = getTimezoneGroups();
 	const MAX_RESULTS = 50; // Limit displayed results for performance
 
 	let open = $state(false);
@@ -54,11 +60,57 @@
 		return results;
 	});
 
+	// Filter regional groups based on search query
+	const filteredRegionalGroups = $derived.by(() => {
+		if (!searchQuery.trim()) {
+			return regionalGroups;
+		}
+
+		const query = searchQuery.toLowerCase();
+		return regionalGroups.filter((group) => group.label.toLowerCase().includes(query));
+	});
+
+	// Filter country groups based on search query
+	const filteredCountryGroups = $derived.by(() => {
+		if (!searchQuery.trim()) {
+			return countryGroups;
+		}
+
+		const query = searchQuery.toLowerCase();
+		return countryGroups.filter((group) => group.label.toLowerCase().includes(query));
+	});
+
 	// Derived label for the button
 	const selectedLabel = $derived.by(() => {
 		if (value.length === 0) {
 			return placeholder;
 		}
+
+		// Check regional groups first (prioritize larger groups)
+		const fullySelectedRegionalGroups = regionalGroups.filter((group) => isGroupSelected(group));
+
+		if (fullySelectedRegionalGroups.length > 0) {
+			// Show the first selected regional group name
+			if (fullySelectedRegionalGroups.length === 1) {
+				return fullySelectedRegionalGroups[0].label;
+			}
+			// Multiple regional groups selected
+			return `${fullySelectedRegionalGroups.length} regional groups selected`;
+		}
+
+		// Check country groups
+		const fullySelectedCountryGroups = countryGroups.filter((group) => isGroupSelected(group));
+
+		if (fullySelectedCountryGroups.length > 0) {
+			// Show the first selected country group name
+			if (fullySelectedCountryGroups.length === 1) {
+				return fullySelectedCountryGroups[0].label;
+			}
+			// Multiple country groups selected
+			return `${fullySelectedCountryGroups.length} country groups selected`;
+		}
+
+		// No complete groups selected, show individual timezone or count
 		if (value.length === 1) {
 			return getTimezoneLabel(value[0]);
 		}
@@ -90,8 +142,38 @@
 		onchange?.(value);
 	}
 
+	function toggleGroup(group: TimezoneGroup) {
+		if (!multiple) {
+			// In single select mode, don't allow group selection
+			return;
+		}
+
+		// Check if all timezones in the group are already selected
+		const allSelected = group.timezones.every((tz) => value.includes(tz));
+
+		if (allSelected) {
+			// Deselect all timezones in the group
+			value = value.filter((v) => !group.timezones.includes(v));
+		} else {
+			// Select all timezones in the group (add only those not already selected)
+			const newTimezones = group.timezones.filter((tz) => !value.includes(tz));
+			value = [...value, ...newTimezones];
+		}
+
+		onchange?.(value);
+	}
+
 	function isSelected(timezoneValue: string): boolean {
 		return value.includes(timezoneValue);
+	}
+
+	function isGroupSelected(group: TimezoneGroup): boolean {
+		return group.timezones.every((tz) => value.includes(tz));
+	}
+
+	function isGroupPartiallySelected(group: TimezoneGroup): boolean {
+		const selectedCount = group.timezones.filter((tz) => value.includes(tz)).length;
+		return selectedCount > 0 && selectedCount < group.timezones.length;
 	}
 
 	// Reset search query when popover closes
@@ -123,7 +205,63 @@
 			<Command.Input placeholder="Search timezones..." autofocus bind:value={searchQuery} />
 			<Command.List>
 				<Command.Empty>No timezone found.</Command.Empty>
-				<Command.Group>
+
+				<!-- Regional Groups -->
+				{#if multiple && filteredRegionalGroups.length > 0}
+					<Command.Group heading="Regional Groups">
+						{#each filteredRegionalGroups as group (group.id)}
+							<Command.Item
+								value={group.id}
+								onSelect={() => {
+									toggleGroup(group);
+								}}
+							>
+								<CheckIcon
+									class={cn(
+										'mr-2 size-4',
+										isGroupSelected(group)
+											? ''
+											: isGroupPartiallySelected(group)
+												? 'opacity-50'
+												: 'text-transparent'
+									)}
+								/>
+								<span class="text-sm font-medium">{group.label}</span>
+							</Command.Item>
+						{/each}
+					</Command.Group>
+					<Command.Separator />
+				{/if}
+
+				<!-- Country-Specific Groups -->
+				{#if multiple && filteredCountryGroups.length > 0}
+					<Command.Group heading="Country Groups">
+						{#each filteredCountryGroups as group (group.id)}
+							<Command.Item
+								value={group.id}
+								onSelect={() => {
+									toggleGroup(group);
+								}}
+							>
+								<CheckIcon
+									class={cn(
+										'mr-2 size-4',
+										isGroupSelected(group)
+											? ''
+											: isGroupPartiallySelected(group)
+												? 'opacity-50'
+												: 'text-transparent'
+									)}
+								/>
+								<span class="text-sm font-medium">{group.label}</span>
+							</Command.Item>
+						{/each}
+					</Command.Group>
+					<Command.Separator />
+				{/if}
+
+				<!-- Individual Timezones -->
+				<Command.Group heading="Individual Timezones">
 					{#each filteredTimezones as timezone (timezone.value)}
 						<Command.Item
 							value={timezone.value}
@@ -131,7 +269,9 @@
 								toggleTimezone(timezone.value);
 							}}
 						>
-							<CheckIcon class={cn('mr-2 size-4', !isSelected(timezone.value) && 'text-transparent')} />
+							<CheckIcon
+								class={cn('mr-2 size-4', !isSelected(timezone.value) && 'text-transparent')}
+							/>
 							<div class="flex flex-col">
 								<span class="text-sm">{timezone.value.replace(/_/g, ' ')}</span>
 								<span class="text-muted-foreground text-xs">{timezone.offset}</span>

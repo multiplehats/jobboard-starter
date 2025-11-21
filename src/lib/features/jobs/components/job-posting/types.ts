@@ -120,7 +120,6 @@ export interface PricingBreakdownProps {
 	pricing: ProductsConfig['jobPosting'];
 	selectedUpsells: Set<string>;
 	totalPrice: number;
-	currency: string;
 }
 
 /**

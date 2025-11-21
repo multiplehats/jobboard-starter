@@ -32,7 +32,7 @@
 		fields.hiringLocation?.type?.value ? fields.hiringLocation.type.value() : undefined
 	);
 
-	// Manage timezones as individual pickers
+	// Manage timezones as a single multi-select picker
 	let selectedTimezones = $state<string[]>([]);
 
 	// Initialize timezones from form value
@@ -41,36 +41,16 @@
 			? fields.hiringLocation.timezones.value() || []
 			: [];
 
-		// Only initialize if we haven't set any values yet
-		if (selectedTimezones.length === 0) {
-			selectedTimezones = currentValue.length > 0 ? currentValue : [''];
+		// Sync with form value
+		if (JSON.stringify(selectedTimezones) !== JSON.stringify(currentValue)) {
+			selectedTimezones = currentValue;
 		}
 	});
 
-	// Add a new timezone picker
-	function addTimezone() {
-		selectedTimezones = [...selectedTimezones, ''];
-	}
-
-	// Remove a timezone
-	function removeTimezone(index: number) {
-		selectedTimezones = selectedTimezones.filter((_, i) => i !== index);
-		updateTimezonesField();
-	}
-
-	// Update a timezone
-	function updateTimezone(index: number, timezone: string) {
-		selectedTimezones[index] = timezone;
-		selectedTimezones = [...selectedTimezones]; // Trigger reactivity
-		updateTimezonesField();
-	}
-
-	// Update the timezones field
-	function updateTimezonesField() {
+	// Update the timezones field when selectedTimezones changes
+	function updateTimezonesField(timezones: string[]) {
 		if (fields.hiringLocation?.timezones) {
-			// Filter out empty strings
-			const validTimezones = selectedTimezones.filter((tz) => tz.trim() !== '');
-			fields.hiringLocation.timezones.set(validTimezones);
+			fields.hiringLocation.timezones.set(timezones);
 		}
 	}
 
@@ -165,7 +145,7 @@
 
 	// Clear timezones when switching to worldwide
 	$effect(() => {
-		if (selectedHiringLocationType === 'worldwide') {
+		if (selectedHiringLocationType === 'worldwide' && selectedTimezones.length > 0) {
 			selectedTimezones = [];
 			if (fields.hiringLocation?.timezones) {
 				fields.hiringLocation.timezones.set([]);
@@ -308,38 +288,20 @@
 				>
 					<Field.Content>
 						<Field.Label>Allowed Timezones *</Field.Label>
-						<Field.Description>Select timezones where you're hiring</Field.Description>
+						<Field.Description>
+							Select one or more timezones where you're hiring. You can select regional groups or
+							individual timezones.
+						</Field.Description>
 					</Field.Content>
-					<div class="flex flex-col gap-3">
-						{#each selectedTimezones as timezone, index (index)}
-							<div class="flex items-center gap-2">
-								<div class="flex-1">
-									<TimezonePicker
-										value={timezone ? [timezone] : []}
-										onchange={(value) => {
-											updateTimezone(index, value[0] || '');
-										}}
-										multiple={false}
-										placeholder="Select timezone..."
-									/>
-								</div>
-								{#if selectedTimezones.length > 1}
-									<Button
-										type="button"
-										variant="ghost"
-										size="sm"
-										onclick={() => removeTimezone(index)}
-										class="shrink-0"
-									>
-										Remove
-									</Button>
-								{/if}
-							</div>
-						{/each}
-
-						<Button type="button" variant="link" onclick={addTimezone} class="self-start px-0">
-							+ Add another timezone
-						</Button>
+					<div class="flex flex-col gap-2">
+						<TimezonePicker
+							bind:value={selectedTimezones}
+							onchange={(timezones) => {
+								updateTimezonesField(timezones);
+							}}
+							multiple={true}
+							placeholder="Select timezones..."
+						/>
 
 						{#each getFormFieldIssues(fields.hiringLocation.timezones) as issue, i (i)}
 							<Field.Error>{issue.message}</Field.Error>

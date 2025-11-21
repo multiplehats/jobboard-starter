@@ -1,10 +1,16 @@
-import { getAllTimezones, getAllCountries } from 'countries-and-timezones';
+import { getAllTimezones, getAllCountries, getTimezonesForCountry } from 'countries-and-timezones';
 
 export interface TimezoneOption {
 	value: string;
 	label: string;
 	offset: string;
 	searchText: string;
+}
+
+export interface TimezoneGroup {
+	id: string;
+	label: string;
+	timezones: string[];
 }
 
 // City aliases for better searchability (timezone ID -> additional city names)
@@ -119,4 +125,100 @@ export function getUserTimezone(): string {
 	} catch {
 		return 'UTC';
 	}
+}
+
+// Cache for timezone groups
+let cachedTimezoneGroups: { regional: TimezoneGroup[]; countrySpecific: TimezoneGroup[] } | null =
+	null;
+
+/**
+ * Get predefined timezone groups (regional and country-specific)
+ * @returns Object containing regional and country-specific timezone groups
+ */
+export function getTimezoneGroups(): { regional: TimezoneGroup[]; countrySpecific: TimezoneGroup[] } {
+	// Return cached groups if available
+	if (cachedTimezoneGroups) {
+		return cachedTimezoneGroups;
+	}
+
+	const allTimezones = getAllTimezones();
+
+	// Helper function to get all timezones for a region/continent
+	const getTimezonesByRegion = (regions: string[]): string[] => {
+		return Object.keys(allTimezones).filter((tz) => {
+			const region = tz.split('/')[0];
+			return regions.includes(region);
+		});
+	};
+
+	// Regional groups
+	const regional: TimezoneGroup[] = [
+		{
+			id: 'all-europe',
+			label: '🌍 All Europe timezones',
+			timezones: getTimezonesByRegion(['Europe'])
+		},
+		{
+			id: 'all-emea',
+			label: '🌍 All EMEA timezones',
+			timezones: getTimezonesByRegion(['Europe', 'Africa', 'Asia']).filter(
+				(tz) =>
+					// Include Middle East (Western Asia)
+					tz.startsWith('Europe/') ||
+					tz.startsWith('Africa/') ||
+					tz.includes('Dubai') ||
+					tz.includes('Riyadh') ||
+					tz.includes('Kuwait') ||
+					tz.includes('Qatar') ||
+					tz.includes('Bahrain')
+			)
+		},
+		{
+			id: 'all-americas',
+			label: '🌎 All Americas timezones',
+			timezones: getTimezonesByRegion(['America'])
+		},
+		{
+			id: 'all-asia-pacific',
+			label: '🌏 All Asia-Pacific timezones',
+			timezones: getTimezonesByRegion(['Asia', 'Pacific', 'Australia', 'Indian'])
+		}
+	];
+
+	// Country-specific groups
+	const countryGroups: Array<{ code: string; label: string; flag: string }> = [
+		{ code: 'NL', label: 'Netherlands', flag: '🇳🇱' },
+		{ code: 'FR', label: 'France', flag: '🇫🇷' },
+		{ code: 'DE', label: 'Germany', flag: '🇩🇪' },
+		{ code: 'GB', label: 'United Kingdom', flag: '🇬🇧' },
+		{ code: 'US', label: 'United States', flag: '🇺🇸' },
+		{ code: 'CA', label: 'Canada', flag: '🇨🇦' },
+		{ code: 'ES', label: 'Spain', flag: '🇪🇸' },
+		{ code: 'IT', label: 'Italy', flag: '🇮🇹' },
+		{ code: 'BE', label: 'Belgium', flag: '🇧🇪' },
+		{ code: 'CH', label: 'Switzerland', flag: '🇨🇭' },
+		{ code: 'AU', label: 'Australia', flag: '🇦🇺' },
+		{ code: 'JP', label: 'Japan', flag: '🇯🇵' },
+		{ code: 'CN', label: 'China', flag: '🇨🇳' },
+		{ code: 'IN', label: 'India', flag: '🇮🇳' },
+		{ code: 'SG', label: 'Singapore', flag: '🇸🇬' }
+	];
+
+	const countrySpecific: TimezoneGroup[] = countryGroups
+		.map((country) => {
+			const countryTimezones = getTimezonesForCountry(country.code);
+			if (!countryTimezones || countryTimezones.length === 0) {
+				return null;
+			}
+
+			return {
+				id: `country-${country.code.toLowerCase()}`,
+				label: `${country.flag} All ${country.label} timezones`,
+				timezones: countryTimezones.map((tz) => tz.name)
+			};
+		})
+		.filter((group): group is TimezoneGroup => group !== null);
+
+	cachedTimezoneGroups = { regional, countrySpecific };
+	return cachedTimezoneGroups;
 }

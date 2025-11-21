@@ -23,7 +23,7 @@
 		CompanyInformationSection,
 		UpsellsSection
 	} from '$lib/features/jobs/components/job-posting/form-sections';
-	import { OrderSummary } from '$lib/features/jobs/components/job-posting/preview';
+	import { PostingSidebar } from '$lib/features/jobs/components/job-posting/preview';
 	import type { PublicJobPostingFields } from '$lib/features/jobs/components/job-posting/types';
 	import { useDraftManager } from '$lib/features/jobs/components/job-posting/draft/use-draft-manager.svelte';
 
@@ -399,6 +399,6 @@
 	</Section.Content>
 
 	<Section.Sidebar animate={true} animateDelay={0.5}>
-		<OrderSummary {pricing} {previewData} {totalPrice} {selectedUpsells} />
+		<PostingSidebar {pricing} {previewData} {totalPrice} {selectedUpsells} />
 	</Section.Sidebar>
 </Section.Root>

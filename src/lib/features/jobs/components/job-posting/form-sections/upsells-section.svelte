@@ -3,6 +3,7 @@
 	import { Checkbox } from '$lib/components/ui/checkbox/index.js';
 	import { Badge } from '$lib/components/ui/badge/index.js';
 	import { SvelteSet } from 'svelte/reactivity';
+	import { formatPrice } from '$lib/utils/currency';
 	import type { UpsellsSectionProps } from '../types';
 
 	let {
@@ -11,6 +12,9 @@
 		selectedUpsells = $bindable(),
 		onSelectedUpsellsChange
 	}: UpsellsSectionProps = $props();
+
+	// Get currency from first upsell (they all share the same currency from pricing config)
+	const currency = enabledUpsells[0]?.currency || 'USD';
 </script>
 
 {#if enabledUpsells.length > 0}
@@ -42,7 +46,7 @@
 						<Field.Content class="space-y-1">
 							<Field.Label for="upsell-{upsell.id}" class="text-base leading-none font-semibold">
 								{upsell.name}
-								<Badge variant="secondary" class="ml-2">+${upsell.priceUSD}</Badge>
+								<Badge variant="secondary" class="ml-2">+{formatPrice(upsell.price, currency)}</Badge>
 								{#if upsell.badge}
 									<Badge variant="outline" class="ml-1">{upsell.badge}</Badge>
 								{/if}
